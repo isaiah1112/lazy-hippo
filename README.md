@@ -1,29 +1,45 @@
-# README #
+# Lazy Hippo Utility
+The `lazy-hippo` utility was written in Python to help quickly split video files, via `ffmpeg` without re-encoding them,
+based on timestamps within the video.
 
-This README would normally document whatever steps are necessary to get your application up and running.
+## Getting Started
+To install or update Lazy Hippo, simply use `pip` or the `make` command:
 
-### What is this repository for? ###
+### Using pip
+```commandline
+python -m pip install -U .
+```
 
-* Quick summary
-* Version
-* [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)
+### Using make
+```commandline
+make install
+```
 
-### How do I get set up? ###
+This will install/update all requirements and enable a `lazy-hippo` command in your environment.
 
-* Summary of set up
-* Configuration
-* Dependencies
-* Database configuration
-* How to run tests
-* Deployment instructions
+## Usage
+Lazy Hippo uses the "chunk" terminology for cutting out pieces of a video into smaller files. "Chunks" are specified by
+a start and end timestamp either specified in seconds (e.g. `25 50`) or as timestamps (e.g. `1:25 3:45`).  In the examples
+just provided the values would be interpreted as "video chunk starting at 25 seconds and ending at 50 seconds" and
+"video chunk starting at 1 minute, 25 seconds and ending at 3 minutes, 45 seconds".  At this time Lazy Hippo can accept
+up to hours in timestamps.
 
-### Contribution guidelines ###
+### Simple Example
+```commandline
+lazy-hippo -C 5 25 my-video.mp4
+```
 
-* Writing tests
-* Code review
-* Other guidelines
+This will create a new video called `my-video-0.mp4`.
 
-### Who do I talk to? ###
+### Multiple Chunks
+You can easily specify multiple chunks from the same video, and they don't even have to be in ascending order:
+```commandline
+lazy-hippo -C 5 25 -C 3:30 4:55 -C 1:00 2:00 test.m4v
+```
 
-* Repo owner or admin
-* Other community or team contact
+This command would output the following video files:
+```shell
+test-0.m4v
+test-1.m4v
+test-2.m4v
+```
