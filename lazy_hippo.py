@@ -2,9 +2,20 @@
 """ Utility for splitting a video into smaller videos based on timestamps
 """
 import click
+import logging
 import os
+from subprocess import run
 import sys
-from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
+import tempfile
+
+global ffmpeg
+
+log = logging.getLogger(__name__)
+log_handler = logging.StreamHandler()
+log_handler.setFormatter(logging.Formatter('%(levelname)s:%(funcName)s:%(message)s'))
+log.addHandler(log_handler)
+log.setLevel(logging.WARNING)
+log.propagate = False  # Keeps our messages out of the root logger.
 
 
 class TimeStamp(click.ParamType):
@@ -29,14 +40,32 @@ class TimeStamp(click.ParamType):
 TIME_STAMP = TimeStamp()
 
 
-@click.command()
+@click.group()
 @click.version_option()
-@click.option('--chunk', '-C', nargs=2, multiple=True, type=TimeStamp(), help='Specify timestamps of video to extract')
-@click.argument('file', type=click.Path(exists=True, dir_okay=False))
+@click.option('--debug', '-d', is_flag=True, help='Enable Debug Mode')
 def cli(**kwargs):
+    """ Easily work with video (via ffmpeg)
+    """
+    global ffmpeg, log
+    if kwargs['debug']:
+        log.setLevel(logging.DEBUG)
+    locate_ffmpeg = run('which ffmpeg', shell=True, capture_output=True)
+    if locate_ffmpeg.returncode == 0 and len(locate_ffmpeg.stdout) > 0:
+        ffmpeg = locate_ffmpeg.stdout.strip().decode()
+        log.info(f'ffmpeg binary located at: {ffmpeg}')
+    else:
+        raise click.UsageError('Unable to locate ffmpeg binary. Is it installed?')
+
+
+@cli.command('split', short_help='Split a video file')
+@click.option('--chunk', '-C', nargs=2, multiple=True, type=TimeStamp(), help='Start/Stop timestamps of video to extract')
+@click.argument('file', type=click.Path(exists=True, dir_okay=False))
+def cli_split(**kwargs):
     """ Chop a video into smaller videos based on timestamps
     """
-    base_path, filename = os.path.split(kwargs['file'])
+    global ffmpeg, log
+    input_file = kwargs['file']
+    base_path, filename = os.path.split(input_file)
     file_ext = filename.split('.').pop()
 
     for idx, chunk in enumerate(kwargs['chunk']):
@@ -46,5 +75,44 @@ def cli(**kwargs):
         else:
             click.echo(f'Processing chunk {idx} from {start_time} to {end_time}...')
             new_file = filename.replace('.' + file_ext, '-' + str(idx)) + '.' + file_ext
-            ffmpeg_extract_subclip(kwargs['file'], start_time, end_time, targetname=new_file)
+            cmd = f'{ffmpeg} -y -ss {start_time} -i {input_file} -t {end_time} -map 0 -vcodec copy -acodec copy -copyts {new_file}'
+            log.debug(cmd)
+            split_cmd = run(cmd, shell=True, capture_output=True)
+            if split_cmd.returncode == 0:
+                log.debug(split_cmd.stderr)
+            else:
+                click.secho('ffmpeg returned non-zero status', fg='red', err=True)
+                log.debug(split_cmd.stderr)
+    click.secho(f'Split of file {input_file} completed...', fg='green')
     sys.exit(0)
+
+
+@cli.command('join', short_help='Join video files')
+@click.option('output', '-o', type=click.Path(exists=False, dir_okay=False), required=True,
+              help='Path to output file')
+@click.argument('file', nargs=-1, type=click.Path(exists=True, dir_okay=False))
+def cli_join(**kwargs):
+    """ Join multiple files into a single file without re-encoding
+    """
+    global ffmpeg, log
+
+    if os.path.exists(kwargs['output']):
+        raise click.BadOptionUsage('output', 'File already exists')
+
+    with tempfile.NamedTemporaryFile('w', dir=os.getcwd(), delete=False) as tf:
+        for f in kwargs['file']:
+            log.debug(f)
+            tf.write(f"file '{f}'\n")
+
+    cmd = f"{ffmpeg} -f concat -safe 0 -i {tf.name} -c copy {kwargs['output']}"
+    log.debug(cmd)
+    join_cmd = run(cmd, shell=True, capture_output=True)
+    if join_cmd.returncode == 0:
+        log.debug(join_cmd.stderr)
+    else:
+        click.secho('ffmpeg returned non-zero status')
+        log.debug(join_cmd.stderr)
+    os.remove(tf.name)
+    click.secho('Joined %d files into %s' % (len(kwargs['file']), kwargs['output']), fg='green')
+    sys.exit(0)
+

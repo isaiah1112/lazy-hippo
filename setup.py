@@ -7,7 +7,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(name='lazy-hippo',
-      version='0.1.0',
+      version='0.2.0',
       author='Jesse Almanrode',
       author_email='jesse@almanrode.com',
       description='Utility splitting video files by timestamp',
@@ -16,8 +16,7 @@ setup(name='lazy-hippo',
       py_modules=['lazy_hippo'],
       python_requires='>=3.10',
       install_requires=['click>=8.1.3',
-                        'colorama>=0.4.5',
-                        'moviepy>=1.0.3'
+                        'colorama>=0.4.5'
                         ],
       entry_points={
           'console_scripts': [
