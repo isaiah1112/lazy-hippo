@@ -18,13 +18,15 @@ make install
 This will install/update all requirements and enable a `lazy-hippo` command in your environment.
 
 ## Usage
+Lazy Hippo contains two primary subcommands: `split` and `join`.  These two commands can be used to manipulate video files
+to your liking.
+
+### Splitting Video
 Lazy Hippo uses the "chunk" terminology for cutting out pieces of a video into smaller files. "Chunks" are specified by
 a start and end timestamp either specified in seconds (e.g. `25 50`) or as timestamps (e.g. `1:25 3:45`).  In the examples
 just provided the values would be interpreted as "video chunk starting at 25 seconds and ending at 50 seconds" and
 "video chunk starting at 1 minute, 25 seconds and ending at 3 minutes, 45 seconds".  At this time Lazy Hippo can accept
 up to hours in timestamps.
-
-### Splitting Video
 ```commandline
 lazy-hippo split -C 5 25 my-video.mp4
 ```
