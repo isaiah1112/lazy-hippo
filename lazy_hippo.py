@@ -75,7 +75,7 @@ def cli_split(**kwargs):
         else:
             click.echo(f'Processing chunk {idx} from {start_time} to {end_time}...')
             new_file = filename.replace('.' + file_ext, '-' + str(idx)) + '.' + file_ext
-            cmd = f'{ffmpeg} -y -ss {start_time} -i {input_file} -t {end_time} -map 0 -vcodec copy -acodec copy -copyts {new_file}'
+            cmd = f'{ffmpeg} -y -ss {start_time} -i {input_file} -t {end_time} -map 0 -vcodec copy -acodec copy -copyts "{new_file}"'
             log.debug(cmd)
             split_cmd = run(cmd, shell=True, capture_output=True)
             if split_cmd.returncode == 0:
@@ -98,13 +98,14 @@ def cli_join(**kwargs):
 
     if os.path.exists(kwargs['output']):
         raise click.BadOptionUsage('output', 'File already exists')
+    output_file = kwargs['output']
 
     with tempfile.NamedTemporaryFile('w', dir=os.getcwd(), delete=False) as tf:
         for f in kwargs['file']:
             log.debug(f)
             tf.write(f"file '{f}'\n")
 
-    cmd = f"{ffmpeg} -f concat -safe 0 -i {tf.name} -c copy {kwargs['output']}"
+    cmd = f'{ffmpeg} -f concat -safe 0 -i {tf.name} -c copy "{output_file}"'
     log.debug(cmd)
     join_cmd = run(cmd, shell=True, capture_output=True)
     if join_cmd.returncode == 0:
@@ -115,4 +116,3 @@ def cli_join(**kwargs):
     os.remove(tf.name)
     click.secho('Joined %d files into %s' % (len(kwargs['file']), kwargs['output']), fg='green')
     sys.exit(0)
-
