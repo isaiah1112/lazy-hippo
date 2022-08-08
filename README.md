@@ -3,7 +3,9 @@ The `lazy-hippo` utility was written in Python to help quickly split video files
 based on timestamps within the video.
 
 ## Getting Started
-To install or update Lazy Hippo, simply use `pip` or the `make` command:
+Before you begin, please be sure to install `ffmpeg` on your system either via [Brew](https://brew.sh), 
+[MacPorts](http://macports.org), or directly from the [FFMpeg Website](https://ffmpeg.org).  To install or update 
+Lazy Hippo, simply use `pip` or the `make` command:
 
 ### Using pip
 ```commandline
@@ -15,7 +17,7 @@ python -m pip install -U .
 make install
 ```
 
-This will install/update all requirements and enable a `lazy-hippo` command in your environment.
+This will install/update all Python requirements and create a `lazy-hippo` command in your environment.
 
 ## Usage
 Lazy Hippo contains two primary subcommands: `split` and `join`.  These two commands can be used to manipulate video files
