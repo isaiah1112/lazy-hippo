@@ -43,12 +43,16 @@ TIME_STAMP = TimeStamp()
 @click.group()
 @click.version_option()
 @click.option('--debug', '-d', is_flag=True, help='Enable Debug Mode')
+@click.option('--verbose', '-v', count=True, help='Increase debug verbosity')
 def cli(**kwargs):
     """ Easily work with video (via ffmpeg)
     """
     global ffmpeg, log
     if kwargs['debug']:
-        log.setLevel(logging.DEBUG)
+        if kwargs['verbose']:
+            log.setLevel(logging.DEBUG)
+        else:
+            log.setLevel(logging.INFO)
     locate_ffmpeg = run('which ffmpeg', shell=True, capture_output=True)
     if locate_ffmpeg.returncode == 0 and len(locate_ffmpeg.stdout) > 0:
         ffmpeg = locate_ffmpeg.stdout.strip().decode()
@@ -58,7 +62,8 @@ def cli(**kwargs):
 
 
 @cli.command('split', short_help='Split a video file')
-@click.option('--chunk', '-C', nargs=2, multiple=True, type=TimeStamp(), help='Start/Stop timestamps of video to extract')
+@click.option('--chunk', '-C', nargs=2, multiple=True, type=TimeStamp(),
+              help='Start/Stop timestamps of video to extract')
 @click.argument('file', type=click.Path(exists=True, dir_okay=False))
 def cli_split(**kwargs):
     """ Chop a video into smaller videos based on timestamps
@@ -75,14 +80,12 @@ def cli_split(**kwargs):
         else:
             click.echo(f'Processing chunk {idx} from {start_time} to {end_time}...')
             new_file = filename.replace('.' + file_ext, '-' + str(idx)) + '.' + file_ext
-            cmd = f'{ffmpeg} -y -ss {start_time} -i {input_file} -t {end_time} -map 0 -vcodec copy -acodec copy -copyts "{new_file}"'
-            log.debug(cmd)
+            cmd = f'{ffmpeg} -y -ss {start_time} -t {end_time} -i \"{input_file}\" -map 0 -vcodec copy -acodec copy -copyts \"{new_file}\"'
+            log.info(cmd)
             split_cmd = run(cmd, shell=True, capture_output=True)
-            if split_cmd.returncode == 0:
-                log.debug(split_cmd.stderr)
-            else:
+            log.debug(split_cmd.stderr)
+            if split_cmd.returncode != 0:
                 click.secho('ffmpeg returned non-zero status', fg='red', err=True)
-                log.debug(split_cmd.stderr)
     click.secho(f'Split of file {input_file} completed...', fg='green')
     sys.exit(0)
 
@@ -96,23 +99,16 @@ def cli_join(**kwargs):
     """
     global ffmpeg, log
 
-    if os.path.exists(kwargs['output']):
-        raise click.BadOptionUsage('output', 'File already exists')
-    output_file = kwargs['output']
-
     with tempfile.NamedTemporaryFile('w', dir=os.getcwd(), delete=False) as tf:
         for f in kwargs['file']:
-            log.debug(f)
             tf.write(f"file '{f}'\n")
 
-    cmd = f'{ffmpeg} -f concat -safe 0 -i {tf.name} -c copy "{output_file}"'
-    log.debug(cmd)
+    cmd = f'{ffmpeg} -y -f concat -safe 0 -i {tf.name} -c copy \"{kwargs["output"]}\"'
+    log.info(cmd)
     join_cmd = run(cmd, shell=True, capture_output=True)
-    if join_cmd.returncode == 0:
-        log.debug(join_cmd.stderr)
-    else:
-        click.secho('ffmpeg returned non-zero status')
-        log.debug(join_cmd.stderr)
+    log.debug(join_cmd.stderr)
+    if join_cmd.returncode != 0:
+        click.secho('ffmpeg returned non-zero status', fg='red', err=True)
     os.remove(tf.name)
     click.secho('Joined %d files into %s' % (len(kwargs['file']), kwargs['output']), fg='green')
     sys.exit(0)
