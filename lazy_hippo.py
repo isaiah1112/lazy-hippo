@@ -80,7 +80,7 @@ def cli_split(**kwargs):
         else:
             click.echo(f'Processing chunk {idx} from {start_time} to {end_time}...')
             new_file = filename.replace('.' + file_ext, '-' + str(idx)) + '.' + file_ext
-            cmd = f'{ffmpeg} -y -ss {start_time} -t {end_time} -i \"{input_file}\" -map 0 -vcodec copy -acodec copy -copyts \"{new_file}\"'
+            cmd = f'{ffmpeg} -y -ss {start_time} -to {end_time} -i \"{input_file}\" -c copy \"{new_file}\"'
             log.info(cmd)
             split_cmd = run(cmd, shell=True, capture_output=True)
             log.debug(split_cmd.stderr)
