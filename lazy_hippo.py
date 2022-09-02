@@ -103,7 +103,7 @@ def cli_join(**kwargs):
         for f in kwargs['file']:
             tf.write(f"file '{f}'\n")
 
-    cmd = f'{ffmpeg} -y -f concat -safe 0 -i {tf.name} -c copy \"{kwargs["output"]}\"'
+    cmd = f'{ffmpeg} -y -f concat -i {tf.name} -c copy \"{kwargs["output"]}\"'
     log.info(cmd)
     join_cmd = run(cmd, shell=True, capture_output=True)
     log.debug(join_cmd.stderr)
