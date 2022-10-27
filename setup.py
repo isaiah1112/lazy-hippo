@@ -29,5 +29,6 @@ setup(name='lazy-hippo',
           'License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)',
           'Development Status :: 5 - Production/Stable',
           'Programming Language :: Python :: 3.10',
+          'Programming Language :: Python :: 3.11',
       ],
       )
