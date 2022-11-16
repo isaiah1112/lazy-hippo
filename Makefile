@@ -1,7 +1,7 @@
-.PHONY: dev-install install
-
+.PHONY: install
 install:
 	@python -m pip install -U .
 
-dev-install:
+.PHONY: install-dev
+install-dev:
 	@python -m pip install -U -e .
