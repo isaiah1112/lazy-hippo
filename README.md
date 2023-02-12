@@ -7,17 +7,22 @@ Before you begin, please be sure to install `ffmpeg` on your system either via [
 [MacPorts](http://macports.org), or directly from the [FFMpeg Website](https://ffmpeg.org).  To install or update 
 Lazy Hippo, simply use `pip` or the `make` command:
 
-### Using pip
-```commandline
-python -m pip install -U .
-```
-
 ### Using make
 ```commandline
 make install
 ```
 
-This will install/update all Python requirements and create a `lazy-hippo` command in your environment.
+### Using Poetry
+```commandline
+poetry install
+# Then run either of the following
+poetry shell;  # And then run `lazy-hippo`
+# or
+poetry run lazy-hippo
+```
+
+This will install/update all Python requirements and create a `lazy-hippo` command in your environment (or virtualenv if using
+Poetry).
 
 ## Usage
 Lazy Hippo contains two primary subcommands: `split` and `join`.  These two commands can be used to manipulate video files
