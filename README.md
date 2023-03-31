@@ -63,6 +63,5 @@ This will create a new video called `joined-video.mp4`.
 # Supported Python Versions
 At this time, the only suppported python versions are:
 
-* Python3.10
 * Python3.11
 
