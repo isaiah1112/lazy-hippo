@@ -1,10 +1,10 @@
 # coding=utf-8
 """ Utility for splitting a video into smaller videos based on timestamps
 """
+from subprocess import run
 import click
 import logging
 import os
-from subprocess import run
 import sys
 import tempfile
 

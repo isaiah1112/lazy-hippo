@@ -59,3 +59,10 @@ lazy-hippo join -o joined-video.mp4 my-video-0.mp4 my-video-1.mp4 my-video-2.mp4
 ```
 
 This will create a new video called `joined-video.mp4`.
+
+# Supported Python Versions
+At this time, the only suppported python versions are:
+
+* Python3.10
+* Python3.11
+
