@@ -70,7 +70,7 @@ def cli_split(**kwargs):
     """
     global ffmpeg, log
     input_file = kwargs['file']
-    base_path, filename = os.path.split(input_file)
+    _, filename = os.path.split(input_file)
     file_ext = filename.split('.').pop()
 
     for idx, chunk in enumerate(kwargs['chunk']):
