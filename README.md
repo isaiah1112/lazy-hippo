@@ -1,11 +1,15 @@
 # Lazy Hippo Utility
-The `lazy-hippo` utility was written in Python to help quickly split video files, via `ffmpeg` without re-encoding them,
-based on timestamps within the video.
+The `lazy-hippo` utility was written in Python to help quickly split or join video files via `ffmpeg` without re-encoding them.
 
 ## Getting Started
 Before you begin, please be sure to install `ffmpeg` on your system either via [Brew](https://brew.sh), 
 [MacPorts](http://macports.org), or directly from the [FFMpeg Website](https://ffmpeg.org).  To install or update 
-Lazy Hippo, simply use `pip` or the `make` command:
+Lazy Hippo, you can use `pip`, `make`, or `poetry`:
+
+### Using Pip
+```commandline
+pip install .
+```
 
 ### Using make
 ```commandline
@@ -21,7 +25,7 @@ poetry shell;  # And then run `lazy-hippo`
 poetry run lazy-hippo
 ```
 
-This will install/update all Python requirements and create a `lazy-hippo` command in your environment (or virtualenv if using
+This will install/update all Python requirements and create a `lazy-hippo` command in your environment (or `virtualenv` if using
 Poetry).
 
 ## Usage
@@ -29,11 +33,12 @@ Lazy Hippo contains two primary subcommands: `split` and `join`.  These two comm
 to your liking.
 
 ### Splitting Video
-Lazy Hippo uses the "chunk" terminology for cutting out pieces of a video into smaller files. "Chunks" are specified by
+Lazy Hippo uses "chunk" terminology for cutting out pieces of a video into smaller files. "Chunks" are specified by
 a start and end timestamp either specified in seconds (e.g. `25 50`) or as timestamps (e.g. `1:25 3:45`).  In the examples
 just provided the values would be interpreted as "video chunk starting at 25 seconds and ending at 50 seconds" and
 "video chunk starting at 1 minute, 25 seconds and ending at 3 minutes, 45 seconds".  At this time Lazy Hippo can accept
-up to hours in timestamps.
+up to hours in timestamps (e.g `1:24:00 1:25:30`).
+
 ```commandline
 lazy-hippo split -C 5 25 my-video.mp4
 ```
@@ -52,6 +57,21 @@ test-0.m4v
 test-1.m4v
 test-2.m4v
 ```
+
+#### Segmentation
+If you would like to split a video into multiple chunks of the same length, you can specify the `--every` option and
+provide the size of each "chunk" of video:
+```commandline
+lazy-hippo split -S 6 my-video.mp4
+```
+
+This command would output the following video files (assuming the video is 18 second long):
+```shell
+test-0.m4v
+test-1.m4v
+test-2.m4v
+```
+
 
 ### Joining Video
 ```commandline
