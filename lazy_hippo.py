@@ -121,8 +121,9 @@ def cli_join(**kwargs):
     log.info(cmd)
     join_cmd = run(cmd, shell=True, capture_output=True)
     log.debug(join_cmd.stderr)
+    os.remove(tf.name)
     if join_cmd.returncode != 0:
         click.secho('ffmpeg returned non-zero status', fg='red', err=True)
-    os.remove(tf.name)
-    click.secho('Joined %d files into %s' % (len(kwargs['file']), kwargs['output']), fg='green')
+    else:
+        click.secho('Joined %d files into %s' % (len(kwargs['file']), kwargs['output']), fg='green')
     sys.exit(0)
