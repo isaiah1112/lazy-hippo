@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lazy-hippo"
-version = "0.2.1"
+version = "0.2.2"
 description = "Utility splitting video files by timestamp"
 authors = ["Jesse Almanrode <jesse@almanrode.com>"]
 license = "MIT"
