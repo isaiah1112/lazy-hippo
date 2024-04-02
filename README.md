@@ -62,7 +62,7 @@ test-2.m4v
 If you would like to split a video into multiple chunks of the same length, you can specify the `--every` option and
 provide the size of each "chunk" of video:
 ```commandline
-lazy-hippo split -S 6 my-video.mp4
+lazy-hippo split -E 6 my-video.mp4
 ```
 
 This command would output the following video files (assuming the video is 18 second long):

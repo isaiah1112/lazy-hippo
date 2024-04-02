@@ -94,7 +94,7 @@ def cli_split(**kwargs):
     elif kwargs['every'] > 0:
         click.secho(f'Splitting video every {kwargs["every"]} seconds...')
         new_file = filename.replace('.' + file_ext, '')
-        cmd = f'{ffmpeg} -i \"{input_file}\" -c copy -map 0 -f segment -segment_time {kwargs["every"]} -reset_timestamps 1 -segment_format_options movflags=+faststart \"{new_file}-%03d.mp4\"'
+        cmd = f'{ffmpeg} -i \"{input_file}\" -c copy -map 0 -f segment -segment_time {kwargs["every"]} -reset_timestamps 1 -segment_format_options movflags=+faststart \"{new_file}-%03d.{file_ext}\"'
         log.info(cmd)
         split_cmd = run(cmd, shell=True, capture_output=True)
         log.debug(split_cmd.stderr)
