@@ -1,4 +1,4 @@
-# Lazy Hippo Utility
+![logo](lazy-hippo.png "Lazy Hippo")
 The `lazy-hippo` utility was written in Python to help quickly split or join video files via `ffmpeg` without re-encoding them.
 
 ## Getting Started
