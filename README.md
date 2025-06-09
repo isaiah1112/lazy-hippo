@@ -1,10 +1,10 @@
-# Lazy Hippo Utility
+![logo](lazy-hippo.png "Lazy Hippo")
 The `lazy-hippo` utility was written in Python to help quickly split or join video files via `ffmpeg` without re-encoding them.
 
 ## Getting Started
 Before you begin, please be sure to install `ffmpeg` on your system either via [Brew](https://brew.sh), 
 [MacPorts](http://macports.org), or directly from the [FFMpeg Website](https://ffmpeg.org).  To install or update 
-Lazy Hippo, you can use `pip`, `make`, or `poetry`:
+Lazy Hippo, you can use `pip`, `make`, or [`uv`](https://docs.astral.sh/uv/):
 
 ### Using Pip
 ```commandline
@@ -16,17 +16,13 @@ pip install .
 make install
 ```
 
-### Using Poetry
+### Using UV
 ```commandline
-poetry install
-# Then run either of the following
-poetry shell;  # And then run `lazy-hippo`
-# or
-poetry run lazy-hippo
+uv run lazy-hippo
 ```
 
 This will install/update all Python requirements and create a `lazy-hippo` command in your environment (or `virtualenv` if using
-Poetry).
+UV).
 
 ## Usage
 Lazy Hippo contains two primary subcommands: `split` and `join`.  These two commands can be used to manipulate video files
