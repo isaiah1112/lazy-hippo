@@ -1,9 +1,9 @@
 [project]
 name = "lazy-hippo"
-version = "0.2.2"
+version = "0.3.0"
 description = "Utility splitting video files by timestamp"
 authors = [{ name = "Jesse Almanrode", email = "jesse@almanrode.com" }]
-requires-python = "~=3.11"
+requires-python = ">=3.11"
 readme = "README.md"
 license = "MIT"
 dependencies = [
