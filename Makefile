@@ -1,6 +1,7 @@
 UV_PATH := $(shell which uv 2>/dev/null)
 
-.PHONY: init
+# Install UV if it is not installed
+.PHONY: uv-init
 init:
 	@if [ -z "$(UV_PATH)" ]; then curl -LsSf https://astral.sh/uv/install.sh | sh; fi
 
@@ -13,5 +14,5 @@ install-dev:
 	@python -m pip install -U -e .
 
 .PHONY: lint
-lint: init
+lint: uv-init
 	@uv run --group test ruff check lazy_hippo.py
