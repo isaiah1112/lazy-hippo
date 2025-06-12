@@ -3,22 +3,17 @@ The `lazy-hippo` utility was written in Python to help quickly split or join vid
 
 ## Getting Started
 Before you begin, please be sure to install `ffmpeg` on your system either via [Brew](https://brew.sh), 
-[MacPorts](http://macports.org), or directly from the [FFMpeg Website](https://ffmpeg.org).  To install or update 
-Lazy Hippo, you can use `pip`, `make`, or [`uv`](https://docs.astral.sh/uv/):
+[MacPorts](http://macports.org), or directly from the [FFMpeg Website](https://ffmpeg.org).
 
-### Using Pip
-```commandline
-pip install .
-```
+To install `lazy-hipp` using a virtualenv created by `uv`:
 
-### Using make
 ```commandline
 make install
 ```
 
-### Using UV
+If you'd prefer to not use a virtualenv or `uv`:
 ```commandline
-uv run lazy-hippo
+make install UV_INSTALL=0
 ```
 
 This will install/update all Python requirements and create a `lazy-hippo` command in your environment (or `virtualenv` if using
@@ -77,7 +72,4 @@ lazy-hippo join -o joined-video.mp4 my-video-0.mp4 my-video-1.mp4 my-video-2.mp4
 This will create a new video called `joined-video.mp4`.
 
 # Supported Python Versions
-At this time, the only suppported python versions are:
-
-* Python3.11
-
+At this time, the only suppported python versions are Python3.11 and later.
