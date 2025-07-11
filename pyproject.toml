@@ -28,3 +28,7 @@ build-backend = "hatchling.build"
 test = [
     "ruff>=0.11.13",
 ]
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "UP", "B", "SIM", "I"]
+ignore = ["E501", "F401"]
