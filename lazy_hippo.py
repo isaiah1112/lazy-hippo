@@ -1,12 +1,12 @@
-# coding=utf-8
 """ Utility for splitting a video into smaller videos based on timestamps
 """
-from subprocess import run
-import click
 import logging
 import os
 import sys
 import tempfile
+from subprocess import run
+
+import click
 
 global ffmpeg
 
@@ -125,5 +125,5 @@ def cli_join(**kwargs):
     if join_cmd.returncode != 0:
         click.secho('ffmpeg returned non-zero status', fg='red', err=True)
     else:
-        click.secho('Joined %d files into %s' % (len(kwargs['file']), kwargs['output']), fg='green')
+        click.secho(f'Joined {len(kwargs["file"])} files into {kwargs["output"]}', fg='green')
     sys.exit(0)
