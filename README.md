@@ -51,7 +51,7 @@ test-2.m4v
 
 #### Segmentation
 If you would like to split a video into multiple chunks of the same length, you can specify the `--every` option and
-provide the size of each "chunk" of video:
+provide the length, in seconds, of each "chunk" of video:
 ```commandline
 lazy-hippo split -E 6 my-video.mp4
 ```
