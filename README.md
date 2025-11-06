@@ -23,6 +23,21 @@ UV).
 Lazy Hippo contains two primary subcommands: `split` and `join`.  These two commands can be used to manipulate video files
 to your liking.
 
+### Video Info
+Lazy Hippo allows you to get detailed info on a video file easily.  It does this via the `ffprobe` binary.
+By default, it will return some basic information in human readable format. If you'd like every bit of metadata
+available, simply add a `-f json` flag to your command.
+
+```commandline
+$ lazy-hippo info my-video
+filename: my-video.mp4
+duration: 1816s
+size: 327MB
+bit_rate: 1509kb/s
+codec_name: h264
+height: 480
+```
+
 ### Splitting Video
 Lazy Hippo uses "chunk" terminology for cutting out pieces of a video into smaller files. "Chunks" are specified by
 a start and end timestamp either specified in seconds (e.g. `25 50`) or as timestamps (e.g. `1:25 3:45`).  In the examples
@@ -62,7 +77,6 @@ test-0.m4v
 test-1.m4v
 test-2.m4v
 ```
-
 
 ### Joining Video
 ```commandline

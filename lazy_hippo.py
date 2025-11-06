@@ -1,9 +1,11 @@
 """ Utility for splitting a video into smaller videos based on timestamps
 """
+import json
 import logging
 import os
 import sys
 import tempfile
+from shlex import quote
 from subprocess import run
 
 import click
@@ -39,6 +41,21 @@ class TimeStamp(click.ParamType):
 
 TIME_STAMP = TimeStamp()
 
+def locate_binary(command: str) -> str:
+    """ Attempt to locate a binary using the 'which' command
+    
+    :param command: The unix command to find by name
+    :type command: str
+    :returns: Full UNIX path to binary (if found)
+    :returntype: str
+    :raises: click.UsageError
+    """
+    global log
+    locate_binary = run('which ' + command, shell=True, capture_output=True)
+    if locate_binary.returncode == 0 and len(locate_binary.stdout) > 0:
+        return locate_binary.stdout.strip().decode()
+    else:
+        raise click.UsageError(f'Unable to locate {command} binary. Is it installed?')
 
 @click.group()
 @click.version_option()
@@ -47,18 +64,14 @@ TIME_STAMP = TimeStamp()
 def cli(**kwargs):
     """ Easily work with video (via ffmpeg)
     """
-    global ffmpeg, log
+    global ffmpeg, ffprobe, log
     if kwargs['debug']:
         if kwargs['verbose']:
             log.setLevel(logging.DEBUG)
         else:
             log.setLevel(logging.INFO)
-    locate_ffmpeg = run('which ffmpeg', shell=True, capture_output=True)
-    if locate_ffmpeg.returncode == 0 and len(locate_ffmpeg.stdout) > 0:
-        ffmpeg = locate_ffmpeg.stdout.strip().decode()
-        log.info(f'ffmpeg binary located at: {ffmpeg}')
-    else:
-        raise click.UsageError('Unable to locate ffmpeg binary. Is it installed?')
+    ffmpeg = locate_binary('ffmpeg')
+    ffprobe = locate_binary('ffprobe')
 
 
 @cli.command('split', short_help='Split a video file')
@@ -126,4 +139,37 @@ def cli_join(**kwargs):
         click.secho('ffmpeg returned non-zero status', fg='red', err=True)
     else:
         click.secho(f'Joined {len(kwargs["file"])} files into {kwargs["output"]}', fg='green')
+    sys.exit(0)
+
+@cli.command('info', short_help='Get Video Metadata')
+@click.option('--format', '-f', type=click.Choice(['txt', 'json']), default='txt', help='Format of output')
+@click.argument('file', nargs=1, type=click.Path(exists=True, dir_okay=False))
+def cli_info(**kwargs):
+    """ Get video stream and format metadata from a file using 'ffprobe'
+    """
+    global ffprobe, log
+    cmd = f'{ffprobe} -v quiet -print_format json -show_format -show_streams ' + quote(kwargs['file'])
+    log.info(cmd)
+    probe_cmd = run(cmd, shell=True, capture_output=True)
+    log.debug(probe_cmd.stderr)
+    if probe_cmd.returncode == 0:
+        if kwargs['format'] == 'json':
+            click.echo(probe_cmd.stdout)
+        else:
+            cmd_json = json.loads(probe_cmd.stdout)
+            format_entries = ['filename', 'duration', 'size', 'bit_rate']
+            for k, v in cmd_json['format'].items():
+                if k in format_entries:
+                    if k == 'size':  # Convert to MB
+                        v = str(round(int(v) / (1024 * 1024))) + "MB"
+                    elif k == 'duration':  # Display as seconds
+                        v = str(round(float(v))) + "s"
+                    elif k == 'bit_rate':  # Convert to kb/s
+                        v = str(round(int(v) / 1000)) + 'kb/s'
+                    click.echo(f'{k}: {v}')
+            stream_entries = ['codec_name', 'height', 'width']
+            video_stream = [x for x in cmd_json['streams'] if x['codec_type'] == 'video']
+            for k, v in video_stream[0].items():
+                if k in stream_entries:
+                    click.echo(f'{k}: {v}')
     sys.exit(0)
