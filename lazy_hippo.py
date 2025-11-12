@@ -62,16 +62,14 @@ def locate_binary(command: str) -> str:
 @click.option('--debug', '-d', is_flag=True, help='Enable Debug Mode')
 @click.option('--verbose', '-v', count=True, help='Increase debug verbosity')
 def cli(**kwargs):
-    """ Easily work with video (via ffmpeg)
+    """ Easily work with video files
     """
-    global ffmpeg, ffprobe, log
+    global log
     if kwargs['debug']:
         if kwargs['verbose']:
             log.setLevel(logging.DEBUG)
         else:
             log.setLevel(logging.INFO)
-    ffmpeg = locate_binary('ffmpeg')
-    ffprobe = locate_binary('ffprobe')
 
 
 @cli.command('split', short_help='Split a video file')
@@ -82,7 +80,8 @@ def cli(**kwargs):
 def cli_split(**kwargs):
     """ Chop a video into smaller videos based on timestamps or every N seconds
     """
-    global ffmpeg, log
+    global log
+    ffmpeg = locate_binary('ffmpeg')
     input_file = kwargs['file']
     _, filename = os.path.split(input_file)
     file_ext = filename.split('.').pop()
@@ -124,8 +123,8 @@ def cli_split(**kwargs):
 def cli_join(**kwargs):
     """ Join multiple files into a single file without re-encoding
     """
-    global ffmpeg, log
-
+    global log
+    ffmpeg = locate_binary('ffmpeg')
     with tempfile.NamedTemporaryFile('w', dir=os.getcwd(), delete=False) as tf:
         for f in kwargs['file']:
             tf.write(f"file '{f}'\n")
@@ -147,7 +146,8 @@ def cli_join(**kwargs):
 def cli_info(**kwargs):
     """ Get video stream and format metadata from a file using 'ffprobe'
     """
-    global ffprobe, log
+    global log
+    ffprobe = locate_binary('ffprobe')
     cmd = f'{ffprobe} -v quiet -print_format json -show_format -show_streams ' + quote(kwargs['file'])
     log.info(cmd)
     probe_cmd = run(cmd, shell=True, capture_output=True)
