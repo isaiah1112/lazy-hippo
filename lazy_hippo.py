@@ -1,4 +1,4 @@
-""" Utility for splitting a video into smaller videos based on timestamps
+""" Utility for manipulating video files without re-encoding
 """
 import json
 import logging
