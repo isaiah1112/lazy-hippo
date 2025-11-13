@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import tempfile
+from pathlib import Path
 from shlex import quote
 from subprocess import run
 
@@ -172,4 +173,26 @@ def cli_info(**kwargs):
             for k, v in video_stream[0].items():
                 if k in stream_entries:
                     click.echo(f'{k}: {v}')
+    sys.exit(0)
+    
+@cli.command('repack', short_help='Change Video Container')
+@click.option('--format', '-f', type=click.Choice(['mkv', 'mp4']), default='mp4', help='Format of output')
+@click.argument('file', nargs=1, type=click.Path(exists=True, dir_okay=False, path_type=Path))
+def cli_repack(**kwargs):
+    """ Repackage a video into a different container type
+    """
+    global log
+    ffmpeg = locate_binary('ffmpeg')
+    new_file = kwargs['file'].with_suffix('.' + kwargs['format'])
+    cmd = f'{ffmpeg} -i {quote(str(kwargs["file"]))} -c:v copy -c:a copy ' + quote(str(new_file))
+    log.info(cmd)
+    repack_cmd = run(cmd, shell=True, capture_output=True)
+    log.debug(repack_cmd.stderr)
+    if repack_cmd.returncode == 0:
+        click.secho(f'Repackaged: {kwargs["file"]} to: {new_file}', fg='green')
+    else:
+        try:
+            os.remove(new_file)
+        finally:
+            click.secho('ffmpeg returned non-zero status', fg='red', err=True)
     sys.exit(0)
