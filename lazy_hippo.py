@@ -7,7 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 from shlex import quote
-from subprocess import run
+from subprocess import CompletedProcess, run
 
 import click
 
@@ -57,6 +57,21 @@ def locate_binary(command: str) -> str:
         return locate_binary.stdout.strip().decode()
     else:
         raise click.UsageError(f'Unable to locate {command} binary. Is it installed?')
+    
+def run_cmd(cmd: str) -> CompletedProcess:
+    """ Run cmd in a shell, capturing the output
+    
+    :param cmd: ffmpeg or ffprobe command to run in shell
+    :type cmd: str
+    :returns: CompletedProcess Object from `subprocess.run()`
+    :rtype: CompletedProcess
+    """
+    global log
+    log.info(cmd)
+    shell_cmd = run(cmd, shell=True, capture_output=True)
+    log.debug(shell_cmd.stderr)
+    return shell_cmd
+    
 
 @click.group()
 @click.version_option()
@@ -82,7 +97,8 @@ def cli_split(**kwargs):
     """ Chop a video into smaller videos based on timestamps or every N seconds
     """
     global log
-    ffmpeg = locate_binary('ffmpeg')    
+    ffmpeg = locate_binary('ffmpeg')
+    ffprobe = locate_binary('ffprobe')
     if kwargs['every'] > 0 and len(kwargs['chunk']) > 0:
         raise click.UsageError('Multiple operations are not supported')
     
@@ -96,18 +112,20 @@ def cli_split(**kwargs):
                 click.echo(f'Processing chunk {idx} from {start_time} to {end_time}...')
                 new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-{str(idx)}{kwargs["file"].suffix}'))
                 cmd = f'{ffmpeg} -y -ss {start_time} -to {end_time} -i {quote(input_file)} -c copy {quote(new_file)}'
-                log.info(cmd)
-                split_cmd = run(cmd, shell=True, capture_output=True)
-                log.debug(split_cmd.stderr)
+                split_cmd = run_cmd(cmd)
                 if split_cmd.returncode != 0:
                     click.secho('ffmpeg returned non-zero status', fg='red', err=True)
     elif kwargs['every'] > 0:
+        padding = 1  # Number of zeros to prefix each "chunk" with
+        log.info(f'Extracting length of video using {ffprobe}')
+        cmd = f'{ffprobe} -v quiet -print_format json -show_format {quote(input_file)}'
+        video_info = run_cmd(cmd)
+        if video_info.returncode == 0:
+            padding = len(json.loads(video_info.stdout)['format']['duration'].split('.')[0])
         click.secho(f'Splitting video every {kwargs["every"]} seconds...')
-        new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-%03d{kwargs["file"].suffix}'))
+        new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-%0{padding}d{kwargs["file"].suffix}'))
         cmd = f'{ffmpeg} -i {quote(input_file)} -c copy -map 0 -f segment -segment_time {kwargs["every"]} -reset_timestamps 1 -segment_format_options movflags=+faststart {quote(new_file)}'
-        log.info(cmd)
-        split_cmd = run(cmd, shell=True, capture_output=True)
-        log.debug(split_cmd.stderr)
+        split_cmd = run_cmd(cmd)
         if split_cmd.returncode!= 0:
             click.secho('ffmpeg returned non-zero status', fg='red', err=True)
     click.secho(f'Split of file {input_file} completed...', fg='green')
@@ -129,9 +147,7 @@ def cli_join(**kwargs):
 
     new_file = str(kwargs['output'])
     cmd = f'{ffmpeg} -y -f concat -i {tf.name} -c copy {quote(new_file)}'
-    log.info(cmd)
-    join_cmd = run(cmd, shell=True, capture_output=True)
-    log.debug(join_cmd.stderr)
+    join_cmd = run_cmd(cmd)
     os.remove(tf.name)
     if join_cmd.returncode != 0:
         click.secho('ffmpeg returned non-zero status', fg='red', err=True)
@@ -148,9 +164,7 @@ def cli_info(**kwargs):
     global log
     ffprobe = locate_binary('ffprobe')
     cmd = f'{ffprobe} -v quiet -print_format json -show_format -show_streams ' + quote(kwargs['file'])
-    log.info(cmd)
-    probe_cmd = run(cmd, shell=True, capture_output=True)
-    log.debug(probe_cmd.stderr)
+    probe_cmd = run_cmd(cmd)
     if probe_cmd.returncode == 0:
         if kwargs['format'] == 'json':
             click.echo(probe_cmd.stdout)
@@ -181,11 +195,10 @@ def cli_repack(**kwargs):
     """
     global log
     ffmpeg = locate_binary('ffmpeg')
-    new_file = kwargs['file'].with_suffix('.' + kwargs['format'])
-    cmd = f'{ffmpeg} -i {quote(str(kwargs["file"]))} -c:v copy -c:a copy ' + quote(str(new_file))
-    log.info(cmd)
-    repack_cmd = run(cmd, shell=True, capture_output=True)
-    log.debug(repack_cmd.stderr)
+    input_file = str(kwargs['file'])
+    new_file = str(kwargs['file'].with_suffix('.' + kwargs['format']))
+    cmd = f'{ffmpeg} -i {quote(input_file)} -c:v copy -c:a copy {quote(new_file)}'
+    repack_cmd = run_cmd(cmd)
     if repack_cmd.returncode == 0:
         click.secho(f'Repackaged: {kwargs["file"]} to: {new_file}', fg='green')
     else:
