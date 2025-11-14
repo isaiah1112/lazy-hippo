@@ -207,3 +207,57 @@ def cli_repack(**kwargs):
         finally:
             click.secho('ffmpeg returned non-zero status', fg='red', err=True)
     sys.exit(0)
+    
+@cli.command('gif-preview', short_help='Create a GIF')
+@click.option('--start', default=0, type=TimeStamp(), help='Starting timestamp')
+@click.option('--stop', default=-1, type=TimeStamp(), help='Ending timestamp')
+@click.option('--step', default=60, help='Seconds between extraction')
+@click.option('--length', default=3, help='Seconds to extract')
+@click.option('--fps', default=5, help="Frames Per Second")
+@click.option('--scale', default=320, help='Height of GIF in pixels')
+@click.argument('file', type=click.Path(exists=True, dir_okay=False, path_type=Path))
+def cli_gif_preview(**kwargs):
+    """ Generate a GIF from a video
+    """
+    global log
+    ffmpeg = locate_binary('ffmpeg')
+    ffprobe = locate_binary('ffprobe')
+    input_file = str(kwargs['file'])
+    output_file = str(kwargs['file'].with_suffix('.gif'))
+    # This is where the magic happens
+    video_filter = f'fps={kwargs["fps"]},scale={kwargs["scale"]}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse'
+    if kwargs['stop'] == -1:
+        cmd = f'{ffprobe} -v quiet -print_format json -show_format {quote(input_file)}'
+        video_info = run_cmd(cmd)
+        if video_info.returncode == 0:
+            kwargs['stop'] = round(float(json.loads(video_info.stdout)['format']['duration']))
+        else:
+            raise click.UsageError('Unable to determine length of video file, please specify --stop manually')
+    if kwargs['start'] >= kwargs['stop']:
+        raise click.BadOptionUsage('start', '--start must be before --stop')
+    if os.path.exists(output_file):
+        if click.confirm(f'{output_file} exists. Overwrite?'):
+            os.remove(output_file)
+        else:
+            sys.exit(0)
+    with tempfile.TemporaryDirectory() as tmp:
+        log.info(f'Generating gif previews in: {tmp}')
+        with open(tmp + '/files.txt', 'w') as tmp_file, click.progressbar(length=kwargs['stop'], label='Generating gifs') as bar:
+            while kwargs['start'] < kwargs['stop']:
+                gif_file = f'{tmp}/{kwargs["start"]}.gif'
+                tmp_file.write(f'file {gif_file}\n')
+                cmd = f'{ffmpeg} -i {input_file} -ss {kwargs["start"]} -t {kwargs["length"]} -vf {quote(video_filter)} -loop 1 {gif_file}'
+                mkgif = run_cmd(cmd)
+                if mkgif.returncode != 0:
+                    click.secho('ffmpeg returned non-zero status building gifs', fg='red', err=True)
+                    sys.exit(mkgif.returncode)
+                log.info(f'Wrote: {gif_file}')
+                kwargs['start'] += kwargs['step']
+                bar.update(kwargs['step'], current_item=kwargs['start'])
+        log.info('Combining gif previews into single file')
+        cmd = f'{ffmpeg} -f concat -safe 0 -i {tmp_file.name} -ignore_loop 1 {output_file}'
+        if run_cmd(cmd).returncode != 0:
+            click.secho('ffmpeg returned non-zero status combining gifs', fg='red', err=True)
+        else:
+            click.secho(f'Created preview GIF: {output_file}', fg='green')
+    sys.exit(0)
