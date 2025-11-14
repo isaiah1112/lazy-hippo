@@ -11,8 +11,6 @@ from subprocess import CompletedProcess, run
 
 import click
 
-global ffmpeg
-
 log = logging.getLogger(__name__)
 log_handler = logging.StreamHandler()
 log_handler.setFormatter(logging.Formatter('%(levelname)s:%(funcName)s:%(message)s'))
@@ -141,18 +139,16 @@ def cli_join(**kwargs):
     """
     global log
     ffmpeg = locate_binary('ffmpeg')
-    with tempfile.NamedTemporaryFile('w', dir=os.getcwd(), delete=False) as tf:
+    with tempfile.NamedTemporaryFile('w', dir=os.getcwd()) as tf:
         for f in kwargs['file']:
             tf.write(f"file {quote(str(f))}\n")
-
-    new_file = str(kwargs['output'])
-    cmd = f'{ffmpeg} -y -f concat -i {tf.name} -c copy {quote(new_file)}'
-    join_cmd = run_cmd(cmd)
-    os.remove(tf.name)
-    if join_cmd.returncode != 0:
-        click.secho('ffmpeg returned non-zero status', fg='red', err=True)
-    else:
-        click.secho(f'Joined {len(kwargs["file"])} files into {kwargs["output"]}', fg='green')
+        else:
+            new_file = str(kwargs['output'])
+            cmd = f'{ffmpeg} -y -f concat -i {tf.name} -c copy {quote(new_file)}'
+            if run_cmd(cmd).returncode != 0:
+                click.secho('ffmpeg returned non-zero status', fg='red', err=True)
+            else:
+                click.secho(f'Joined {len(kwargs["file"])} files into {kwargs["output"]}', fg='green')
     sys.exit(0)
 
 @cli.command('info', short_help='Get Video Metadata')
@@ -198,12 +194,11 @@ def cli_repack(**kwargs):
     input_file = str(kwargs['file'])
     new_file = str(kwargs['file'].with_suffix('.' + kwargs['format']))
     cmd = f'{ffmpeg} -i {quote(input_file)} -c:v copy -c:a copy {quote(new_file)}'
-    repack_cmd = run_cmd(cmd)
-    if repack_cmd.returncode == 0:
+    if run_cmd(cmd).returncode == 0:
         click.secho(f'Repackaged: {kwargs["file"]} to: {new_file}', fg='green')
     else:
         try:
-            os.remove(new_file)
+            os.remove(new_file)  # ffmpeg doesn't clean up files when repackaging fails
         finally:
             click.secho('ffmpeg returned non-zero status', fg='red', err=True)
     sys.exit(0)
