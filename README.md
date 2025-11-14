@@ -1,6 +1,5 @@
 ![logo](./logo.png "Lazy Hippo")
-`lazy-hippo` is a command-line utility, written in Python, to allow easy access to `ffmpeg` or `ffprobe` for manipulating
-video files.
+`lazy-hippo` is a command-line utility, written in Python, to easily manipulate video files using `ffmpeg` and `ffprobe`.
 
 ## Getting Started
 Before you begin, please be sure to install `ffmpeg` and `ffprobe` on your system either via [Brew](https://brew.sh), 
@@ -17,8 +16,7 @@ If you'd prefer to not use a virtualenv or `uv`:
 $ make install UV_INSTALL=0
 ```
 
-This will install/update all Python requirements and create a `lazy-hippo` command in your environment (or `virtualenv` if using
-UV).
+This will install/update all Python dependencies and create a `lazy-hippo` command in your environment (or `virtualenv` if using UV).
 
 ## Usage
 Lazy Hippo contains the following sub-commands which can be used to manipulate video to your liking:
@@ -30,7 +28,7 @@ Lazy Hippo contains the following sub-commands which can be used to manipulate v
 
 ### Info
 Lazy Hippo allows you to get detailed info on a video file easily.  It does this via the `ffprobe` binary.
-By default, it will return some basic information in human readable format. If you'd like every bit of metadata
+By default, it returns basic information in human-readable format. If you'd like every bit of metadata
 available, simply add a `-f json` flag to your command.
 
 ```commandline
@@ -44,11 +42,10 @@ height: 480
 ```
 
 ### Split
-Lazy Hippo uses "chunk" terminology for cutting out pieces of a video into smaller files. "Chunks" are specified by
-a start and end timestamp either specified in seconds (e.g. `25 50`) or as timestamps (e.g. `1:25 3:45`).  In the examples
-just provided the values would be interpreted as "video chunk starting at 25 seconds and ending at 50 seconds" and
-"video chunk starting at 1 minute, 25 seconds and ending at 3 minutes, 45 seconds".  At this time Lazy Hippo can accept
-up to hours in timestamps (e.g `1:24:00 1:25:30`).
+Lazy Hippo uses "chunks" to extract segments of a video. "Chunks" are specified by a start and end timestamp, 
+either in seconds (e.g., 25 50) or as time codes (e.g., 1:25 3:45).  In the examples provided the values 
+would be interpreted as "video chunk starting at 25 seconds and ending at 50 seconds" and
+"video chunk starting at 1 minute, 25 seconds and ending at 3 minutes, 45 seconds".  Lazy Hippo currently supports timestamps up to hours (e.g `1:24:00 1:25:30`).
 
 ```commandline
 $ lazy-hippo split -C 5 25 my-video.mp4
@@ -56,7 +53,7 @@ $ lazy-hippo split -C 5 25 my-video.mp4
 
 This will create a new video called `my-video-0.mp4`.
 
-#### Multiple Chunks
+#### Chunks
 You can easily specify multiple chunks from the same video, and they don't even have to be in ascending order:
 ```commandline
 $ lazy-hippo split -C 5 25 -C 3:30 4:55 -C 1:00 2:00 test.m4v
@@ -69,8 +66,8 @@ test-1.m4v
 test-2.m4v
 ```
 
-#### Segmentation
-If you would like to split a video into multiple chunks of the same length, you can specify the `--every` option and
+#### Fixed-Length Chunks
+To split a video into equal-length chunks, you can specify the `--every` option and
 provide the length, in seconds, of each "chunk" of video:
 ```commandline
 lazy-hippo split -E 6 my-video.mp4
