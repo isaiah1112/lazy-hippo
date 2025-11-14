@@ -15,11 +15,11 @@ init:
 
 .PHONY: install
 install:
-	@if [ $(UV_INSTALL) ]; then\
+	@if [ $(UV_INSTALL) -eq 1 ]; then\
 		$(MAKE) uv-init && uv sync && echo "Please run the following to activate the virtualenv:\n source .venv/bin/activate";\
 	else\
 		python -m pip install -U .;\
-	if
+	fi
 
 .PHONY: lint
 lint: uv-init

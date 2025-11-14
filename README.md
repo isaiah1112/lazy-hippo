@@ -1,45 +1,62 @@
 ![logo](./logo.png "Lazy Hippo")
-The `lazy-hippo` utility was written in Python to help quickly split or join video files via `ffmpeg` without re-encoding them.
+`lazy-hippo` is a command-line utility, written in Python, to easily manipulate video files using `ffmpeg` and `ffprobe`.
 
 ## Getting Started
-Before you begin, please be sure to install `ffmpeg` on your system either via [Brew](https://brew.sh), 
+Before you begin, please be sure to install `ffmpeg` and `ffprobe` on your system either via [Brew](https://brew.sh), 
 [MacPorts](http://macports.org), or directly from the [FFMpeg Website](https://ffmpeg.org).
 
-To install `lazy-hipp` using a virtualenv created by `uv`:
+To install `lazy-hippo` using a virtualenv created by `uv`:
 
 ```commandline
-make install
+$ make install
 ```
 
 If you'd prefer to not use a virtualenv or `uv`:
 ```commandline
-make install UV_INSTALL=0
+$ make install UV_INSTALL=0
 ```
 
-This will install/update all Python requirements and create a `lazy-hippo` command in your environment (or `virtualenv` if using
-UV).
+This will install/update all Python dependencies and create a `lazy-hippo` command in your environment (or `virtualenv` if using UV).
 
 ## Usage
-Lazy Hippo contains two primary subcommands: `split` and `join`.  These two commands can be used to manipulate video files
-to your liking.
+Lazy Hippo contains the following sub-commands which can be used to manipulate video to your liking:
+- `info`
+- `join`
+- `repack`
+- `split`
 
-### Splitting Video
-Lazy Hippo uses "chunk" terminology for cutting out pieces of a video into smaller files. "Chunks" are specified by
-a start and end timestamp either specified in seconds (e.g. `25 50`) or as timestamps (e.g. `1:25 3:45`).  In the examples
-just provided the values would be interpreted as "video chunk starting at 25 seconds and ending at 50 seconds" and
-"video chunk starting at 1 minute, 25 seconds and ending at 3 minutes, 45 seconds".  At this time Lazy Hippo can accept
-up to hours in timestamps (e.g `1:24:00 1:25:30`).
+
+### Info
+Lazy Hippo allows you to get detailed info on a video file easily.  It does this via the `ffprobe` binary.
+By default, it returns basic information in human-readable format. If you'd like every bit of metadata
+available, simply add a `-f json` flag to your command.
 
 ```commandline
-lazy-hippo split -C 5 25 my-video.mp4
+$ lazy-hippo info my-video
+filename: my-video.mp4
+duration: 1816s
+size: 327MB
+bit_rate: 1509kb/s
+codec_name: h264
+height: 480
+```
+
+### Split
+Lazy Hippo uses "chunks" to extract segments of a video. "Chunks" are specified by a start and end timestamp, 
+either in seconds (e.g., 25 50) or as time codes (e.g., 1:25 3:45).  In the examples provided the values 
+would be interpreted as "video chunk starting at 25 seconds and ending at 50 seconds" and
+"video chunk starting at 1 minute, 25 seconds and ending at 3 minutes, 45 seconds".  Lazy Hippo currently supports timestamps up to hours (e.g `1:24:00 1:25:30`).
+
+```commandline
+$ lazy-hippo split -C 5 25 my-video.mp4
 ```
 
 This will create a new video called `my-video-0.mp4`.
 
-#### Multiple Chunks
+#### Chunks
 You can easily specify multiple chunks from the same video, and they don't even have to be in ascending order:
 ```commandline
-lazy-hippo split -C 5 25 -C 3:30 4:55 -C 1:00 2:00 test.m4v
+$ lazy-hippo split -C 5 25 -C 3:30 4:55 -C 1:00 2:00 test.m4v
 ```
 
 This command would output the following video files:
@@ -49,8 +66,8 @@ test-1.m4v
 test-2.m4v
 ```
 
-#### Segmentation
-If you would like to split a video into multiple chunks of the same length, you can specify the `--every` option and
+#### Fixed-Length Chunks
+To split a video into equal-length chunks, you can specify the `--every` option and
 provide the length, in seconds, of each "chunk" of video:
 ```commandline
 lazy-hippo split -E 6 my-video.mp4
@@ -58,18 +75,26 @@ lazy-hippo split -E 6 my-video.mp4
 
 This command would output the following video files (assuming the video is 18 second long):
 ```shell
-test-0.m4v
-test-1.m4v
-test-2.m4v
+my-video-0.m4v
+my-video-1.m4v
+my-video-2.m4v
 ```
 
-
-### Joining Video
+### Join
 ```commandline
-lazy-hippo join -o joined-video.mp4 my-video-0.mp4 my-video-1.mp4 my-video-2.mp4
+$ lazy-hippo join -o joined-video.mp4 my-video-0.mp4 my-video-1.mp4 my-video-2.mp4
 ```
 
 This will create a new video called `joined-video.mp4`.
+
+### Repack
+If you would like to repackage a video file from one container type to another (e.g. `mkv` to `mp4`)
+you can use the `repack` command.  Keep in mind though that this is **NOT** re-encoding the file but simply
+changing the video container.
+```commandline
+$ lazy-hippo repack -f mp4 test.mkv
+Repackaged: test.mkv to: test.mp4
+```
 
 # Supported Python Versions
 At this time, the only suppported python versions are Python3.11 and later.
