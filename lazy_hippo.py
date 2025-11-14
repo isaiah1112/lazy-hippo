@@ -56,6 +56,28 @@ def locate_binary(command: str) -> str:
     else:
         raise click.UsageError(f'Unable to locate {command} binary. Is it installed?')
     
+def probe_metadata(video_file: Path, short: bool = True) -> dict:
+    """ Use `ffprobe` to extract video metadata
+    
+    :param video_file: Path to video file
+    :type video_file: pathlib.Path
+    :param short: Only return `format` info (Default: True)
+    :type short: bool
+    :returns: Output of `ffprobe`
+    :rtype: dict
+    :raises: subprocess.CalledProcessError
+    """
+    global log
+    ffprobe = locate_binary('ffprobe')
+    if short:
+        cmd = f'{ffprobe} -v quiet -print_format json -show_format {quote(str(video_file))}'
+    else:
+        cmd = f'{ffprobe} -v quiet -print_format json -show_format -show_streams {quote(str(video_file))}'
+    video_metadata = run_cmd(cmd)
+    video_metadata.check_returncode()
+    return json.loads(video_metadata.stdout)
+    
+    
 def run_cmd(cmd: str) -> CompletedProcess:
     """ Run cmd in a shell, capturing the output
     
@@ -255,4 +277,33 @@ def cli_gif_preview(**kwargs):
             click.secho('ffmpeg returned non-zero status combining gifs', fg='red', err=True)
         else:
             click.secho(f'Created preview GIF: {output_file}', fg='green')
+    sys.exit(0)
+    
+@cli.command('extract', short_help='Extract Screencaps')
+@click.option('--step', '-s', default=60, help='Seconds between frames')
+@click.option('--output', '-o', default=Path('screencaps'), type=click.Path(file_okay=False, exists=False, path_type=Path),
+              help='Output directory')
+@click.argument('file', type=click.Path(exists=True, dir_okay=False, path_type=Path))
+def cli_extract(**kwargs):
+    """ Extract screen captures on a timed interval
+    """
+    global log
+    ffmpeg = locate_binary('ffmpeg')
+    video_length = round(float(probe_metadata(kwargs['file'])['format']['duration']))
+    padding = len(str(video_length))
+    total_frames = video_length // kwargs['step']
+    video_filter = f'fps=1/{kwargs["step"]},drawtext=fontfile=/Library/Fonts/Arial.ttf:fontsize=45:fontcolor=yellow:box=1:boxcolor=black:x=(W-tw)/2:y=H-th-10:' + r'text="%{pts\:hms}"'
+    cmd = f'{ffmpeg} -i {quote(str(kwargs["file"]))} -vf {quote(video_filter)} {str(kwargs["output"])}/img%0{padding}d.jpg'
+    log.info('Creating output directory')
+    kwargs['output'].mkdir(exist_ok=True)
+    log.info('Extracting frames')
+    with click.progressbar(label='Extracting frames', length=video_length) as bar:
+        try:
+            run_cmd(cmd)
+        except SubprocessError:
+            click.secho('ffmpeg returned non-zero status', fg='red', err=True)
+        else:
+            # I dislike doing this but click does not have an indeterminate progress bar 
+            bar.update(n_steps=video_length)
+    click.secho(f'Wrote {total_frames} screencaps to: {kwargs["output"]}/', fg='green')
     sys.exit(0)

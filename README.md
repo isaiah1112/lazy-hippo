@@ -25,6 +25,7 @@ Lazy Hippo contains the following sub-commands which can be used to manipulate v
 - `repack`
 - `split`
 - `gif-preview`
+- `extract`
 
 
 ### Info
@@ -109,6 +110,15 @@ Created preview GIF: test.gif
 ```
 
 See the embedded `--help` option for all the supported customizations. 
+
+### Extract
+The `extract` command extracts frames from a video file at specified intervals.  By default, `lazy-hippo`
+will create a `screencaps` directory to store the image files in.
+```commandline
+$ lazy-hippo extract test.mp4
+Extracting frames  [####################################]  100%
+Wrote 10 screencaps to: screencaps/
+```
 
 # Supported Python Versions
 At this time, the only suppported python versions are Python3.11 and later.
