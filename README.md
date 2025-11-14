@@ -24,6 +24,7 @@ Lazy Hippo contains the following sub-commands which can be used to manipulate v
 - `join`
 - `repack`
 - `split`
+- `gif-preview`
 
 
 ### Info
@@ -95,6 +96,19 @@ changing the video container.
 $ lazy-hippo repack -f mp4 test.mkv
 Repackaged: test.mkv to: test.mp4
 ```
+
+### GIF-Preview
+`lazy-hippo` supports the creation of a preview gif file.  Essentially, the gif file is a compilation of
+extracted portions of video, reduced to a specific framerate, and resized. By default, the `gif-preview` 
+command takes turns 3 seconds of video into a 5 fps gif, resized to 320px, at 60 second intervals in a video.
+It then, combines all those preview gifs into a single file.
+```commandline
+$ lazy-hippo gif-preview test.mp4
+Generating gifs  [####################################]  100%
+Created preview GIF: test.gif
+```
+
+See the embedded `--help` option for all the supported customizations. 
 
 # Supported Python Versions
 At this time, the only suppported python versions are Python3.11 and later.
