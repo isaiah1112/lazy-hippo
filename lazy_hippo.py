@@ -77,19 +77,16 @@ def cli(**kwargs):
 @click.option('--chunk', '-C', nargs=2, multiple=True, type=TimeStamp(),
               help='Start/Stop timestamps of video to extract')
 @click.option('--every', '-E', type=int, default=0, help='Length of each chunk')
-@click.argument('file', type=click.Path(exists=True, dir_okay=False))
+@click.argument('file', type=click.Path(exists=True, dir_okay=False, path_type=Path))
 def cli_split(**kwargs):
     """ Chop a video into smaller videos based on timestamps or every N seconds
     """
     global log
-    ffmpeg = locate_binary('ffmpeg')
-    input_file = kwargs['file']
-    _, filename = os.path.split(input_file)
-    file_ext = filename.split('.').pop()
-    
+    ffmpeg = locate_binary('ffmpeg')    
     if kwargs['every'] > 0 and len(kwargs['chunk']) > 0:
         raise click.UsageError('Multiple operations are not supported')
-
+    
+    input_file = str(kwargs['file'])
     if len(kwargs['chunk']) > 0:
         for idx, chunk in enumerate(kwargs['chunk']):
             start_time, end_time = chunk
@@ -97,8 +94,8 @@ def cli_split(**kwargs):
                 click.secho(f'Cannot process chunk {idx} since {end_time} is before {start_time}')
             else:
                 click.echo(f'Processing chunk {idx} from {start_time} to {end_time}...')
-                new_file = filename.replace('.' + file_ext, '-' + str(idx)) + '.' + file_ext
-                cmd = f'{ffmpeg} -y -ss {start_time} -to {end_time} -i \"{input_file}\" -c copy \"{new_file}\"'
+                new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-{str(idx)}{kwargs["file"].suffix}'))
+                cmd = f'{ffmpeg} -y -ss {start_time} -to {end_time} -i {quote(input_file)} -c copy {quote(new_file)}'
                 log.info(cmd)
                 split_cmd = run(cmd, shell=True, capture_output=True)
                 log.debug(split_cmd.stderr)
@@ -106,8 +103,8 @@ def cli_split(**kwargs):
                     click.secho('ffmpeg returned non-zero status', fg='red', err=True)
     elif kwargs['every'] > 0:
         click.secho(f'Splitting video every {kwargs["every"]} seconds...')
-        new_file = filename.replace('.' + file_ext, '')
-        cmd = f'{ffmpeg} -i \"{input_file}\" -c copy -map 0 -f segment -segment_time {kwargs["every"]} -reset_timestamps 1 -segment_format_options movflags=+faststart \"{new_file}-%03d.{file_ext}\"'
+        new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-%03d{kwargs["file"].suffix}'))
+        cmd = f'{ffmpeg} -i {quote(input_file)} -c copy -map 0 -f segment -segment_time {kwargs["every"]} -reset_timestamps 1 -segment_format_options movflags=+faststart {quote(new_file)}'
         log.info(cmd)
         split_cmd = run(cmd, shell=True, capture_output=True)
         log.debug(split_cmd.stderr)
@@ -118,9 +115,9 @@ def cli_split(**kwargs):
 
 
 @cli.command('join', short_help='Join video files')
-@click.option('output', '-o', type=click.Path(exists=False, dir_okay=False), required=True,
+@click.option('output', '-o', type=click.Path(exists=False, dir_okay=False, path_type=Path), required=True,
               help='Path to output file')
-@click.argument('file', nargs=-1, type=click.Path(exists=True, dir_okay=False))
+@click.argument('file', nargs=-1, type=click.Path(exists=True, dir_okay=False, path_type=Path))
 def cli_join(**kwargs):
     """ Join multiple files into a single file without re-encoding
     """
@@ -128,9 +125,10 @@ def cli_join(**kwargs):
     ffmpeg = locate_binary('ffmpeg')
     with tempfile.NamedTemporaryFile('w', dir=os.getcwd(), delete=False) as tf:
         for f in kwargs['file']:
-            tf.write(f"file '{f}'\n")
+            tf.write(f"file {quote(str(f))}\n")
 
-    cmd = f'{ffmpeg} -y -f concat -i {tf.name} -c copy \"{kwargs["output"]}\"'
+    new_file = str(kwargs['output'])
+    cmd = f'{ffmpeg} -y -f concat -i {tf.name} -c copy {quote(new_file)}'
     log.info(cmd)
     join_cmd = run(cmd, shell=True, capture_output=True)
     log.debug(join_cmd.stderr)
