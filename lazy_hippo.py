@@ -165,18 +165,19 @@ def cli_join(**kwargs):
     """
     global log
     ffmpeg = locate_binary('ffmpeg')
-    with tempfile.NamedTemporaryFile('w', dir=os.getcwd()) as tf:
+    with tempfile.NamedTemporaryFile('w', dir=os.getcwd(), delete=False) as tf:
         for f in kwargs['file']:
             tf.write(f"file {quote(str(f))}\n")
-        else:
-            new_file = str(kwargs['output'])
-            cmd = f'{ffmpeg} -y -f concat -i {tf.name} -c copy {quote(new_file)}'
-            try:
-                run_cmd(cmd)
-            except SubprocessError:
-                click.secho('ffmpeg returned non-zero status', fg='red', err=True)
-            else:
-                click.secho(f'Joined {len(kwargs["file"])} files into {kwargs["output"]}', fg='green')
+    new_file = str(kwargs['output'])
+    cmd = f'{ffmpeg} -y -f concat -i {tf.name} -c copy {quote(new_file)}'
+    try:
+        run_cmd(cmd)
+    except SubprocessError:
+        click.secho('ffmpeg returned non-zero status', fg='red', err=True)
+    else:
+        click.secho(f'Joined {len(kwargs["file"])} files into {kwargs["output"]}', fg='green')
+    finally:
+        os.remove(tf.name)  # Clean up our temporary file
     sys.exit(0)
 
 @cli.command('info', short_help='Get Video Metadata')
