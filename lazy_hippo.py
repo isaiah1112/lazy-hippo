@@ -7,7 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 from shlex import quote
-from subprocess import CompletedProcess, run
+from subprocess import CompletedProcess, SubprocessError, run
 
 import click
 
@@ -85,11 +85,13 @@ def run_cmd(cmd: str) -> CompletedProcess:
     :type cmd: str
     :returns: CompletedProcess Object from `subprocess.run()`
     :rtype: CompletedProcess
+    :raises: subprocess.CalledProcessError
     """
     global log
     log.info(cmd)
     shell_cmd = run(cmd, shell=True, capture_output=True)
-    log.debug(shell_cmd.stderr)
+    log.debug(shell_cmd)
+    shell_cmd.check_returncode()
     return shell_cmd
     
 
@@ -118,7 +120,6 @@ def cli_split(**kwargs):
     """
     global log
     ffmpeg = locate_binary('ffmpeg')
-    ffprobe = locate_binary('ffprobe')
     if kwargs['every'] > 0 and len(kwargs['chunk']) > 0:
         raise click.UsageError('Multiple operations are not supported')
     
@@ -132,23 +133,26 @@ def cli_split(**kwargs):
                 click.echo(f'Processing chunk {idx} from {start_time} to {end_time}...')
                 new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-{str(idx)}{kwargs["file"].suffix}'))
                 cmd = f'{ffmpeg} -y -ss {start_time} -to {end_time} -i {quote(input_file)} -c copy {quote(new_file)}'
-                split_cmd = run_cmd(cmd)
-                if split_cmd.returncode != 0:
+                try:
+                    run_cmd(cmd)
+                except SubprocessError:
                     click.secho('ffmpeg returned non-zero status', fg='red', err=True)
     elif kwargs['every'] > 0:
-        padding = 1  # Number of zeros to prefix each "chunk" with
-        log.info(f'Extracting length of video using {ffprobe}')
-        cmd = f'{ffprobe} -v quiet -print_format json -show_format {quote(input_file)}'
-        video_info = run_cmd(cmd)
-        if video_info.returncode == 0:
-            padding = len(json.loads(video_info.stdout)['format']['duration'].split('.')[0])
-        click.secho(f'Splitting video every {kwargs["every"]} seconds...')
-        new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-%0{padding}d{kwargs["file"].suffix}'))
-        cmd = f'{ffmpeg} -i {quote(input_file)} -c copy -map 0 -f segment -segment_time {kwargs["every"]} -reset_timestamps 1 -segment_format_options movflags=+faststart {quote(new_file)}'
-        split_cmd = run_cmd(cmd)
-        if split_cmd.returncode!= 0:
-            click.secho('ffmpeg returned non-zero status', fg='red', err=True)
-    click.secho(f'Split of file {input_file} completed...', fg='green')
+        try:
+            video_info = probe_metadata(kwargs['file'])
+        except SubprocessError:
+            click.secho('Unable to determine video duration', fg='red', err=True)
+        else:
+            padding = len(video_info['format']['duration'].split('.')[0])
+            click.secho(f'Splitting video every {kwargs["every"]} seconds...')
+            new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-%0{padding}d{kwargs["file"].suffix}'))
+            cmd = f'{ffmpeg} -i {quote(input_file)} -c copy -map 0 -f segment -segment_time {kwargs["every"]} -reset_timestamps 1 -segment_format_options movflags=+faststart {quote(new_file)}'
+            try:
+                run_cmd(cmd)
+            except SubprocessError:
+                click.secho('ffmpeg returned non-zero status', fg='red', err=True)
+            else:
+                click.secho(f'Split of file {input_file} completed...', fg='green')
     sys.exit(0)
 
 
@@ -167,7 +171,9 @@ def cli_join(**kwargs):
         else:
             new_file = str(kwargs['output'])
             cmd = f'{ffmpeg} -y -f concat -i {tf.name} -c copy {quote(new_file)}'
-            if run_cmd(cmd).returncode != 0:
+            try:
+                run_cmd(cmd)
+            except SubprocessError:
                 click.secho('ffmpeg returned non-zero status', fg='red', err=True)
             else:
                 click.secho(f'Joined {len(kwargs["file"])} files into {kwargs["output"]}', fg='green')
@@ -180,16 +186,16 @@ def cli_info(**kwargs):
     """ Get video stream and format metadata from a file using 'ffprobe'
     """
     global log
-    ffprobe = locate_binary('ffprobe')
-    cmd = f'{ffprobe} -v quiet -print_format json -show_format -show_streams ' + quote(kwargs['file'])
-    probe_cmd = run_cmd(cmd)
-    if probe_cmd.returncode == 0:
+    try:
+        video_info = probe_metadata(kwargs['file'], short=False)
+    except SubprocessError:
+        click.secho('ffprobe returned non-zero status', fg='red', err=True)
+    else:
         if kwargs['format'] == 'json':
-            click.echo(probe_cmd.stdout)
+            click.echo(json.dumps(video_info, indent=2))
         else:
-            cmd_json = json.loads(probe_cmd.stdout)
             format_entries = ['filename', 'duration', 'size', 'bit_rate']
-            for k, v in cmd_json['format'].items():
+            for k, v in video_info['format'].items():
                 if k in format_entries:
                     if k == 'size':  # Convert to MB
                         v = str(round(int(v) / (1024 * 1024))) + "MB"
@@ -199,7 +205,7 @@ def cli_info(**kwargs):
                         v = str(round(int(v) / 1000)) + 'kb/s'
                     click.echo(f'{k}: {v}')
             stream_entries = ['codec_name', 'height', 'width']
-            video_stream = [x for x in cmd_json['streams'] if x['codec_type'] == 'video']
+            video_stream = [x for x in video_info['streams'] if x['codec_type'] == 'video']
             for k, v in video_stream[0].items():
                 if k in stream_entries:
                     click.echo(f'{k}: {v}')
@@ -216,13 +222,15 @@ def cli_repack(**kwargs):
     input_file = str(kwargs['file'])
     new_file = str(kwargs['file'].with_suffix('.' + kwargs['format']))
     cmd = f'{ffmpeg} -i {quote(input_file)} -c:v copy -c:a copy {quote(new_file)}'
-    if run_cmd(cmd).returncode == 0:
-        click.secho(f'Repackaged: {kwargs["file"]} to: {new_file}', fg='green')
-    else:
+    try:
+        run_cmd(cmd)
+    except SubprocessError:
         try:
             os.remove(new_file)  # ffmpeg doesn't clean up files when repackaging fails
         finally:
             click.secho('ffmpeg returned non-zero status', fg='red', err=True)
+    else:
+        click.secho(f'Repackaged: {kwargs["file"]} to: {new_file}', fg='green')
     sys.exit(0)
     
 @cli.command('gif-preview', short_help='Create a GIF')
@@ -238,18 +246,18 @@ def cli_gif_preview(**kwargs):
     """
     global log
     ffmpeg = locate_binary('ffmpeg')
-    ffprobe = locate_binary('ffprobe')
     input_file = str(kwargs['file'])
     output_file = str(kwargs['file'].with_suffix('.gif'))
     # This is where the magic happens
     video_filter = f'fps={kwargs["fps"]},scale={kwargs["scale"]}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse'
     if kwargs['stop'] == -1:
-        cmd = f'{ffprobe} -v quiet -print_format json -show_format {quote(input_file)}'
-        video_info = run_cmd(cmd)
-        if video_info.returncode == 0:
-            kwargs['stop'] = round(float(json.loads(video_info.stdout)['format']['duration']))
+        try:
+            video_info = probe_metadata(kwargs['file'])
+        except SubprocessError:
+            click.secho('Unable to determine length of video file, please specify --stop manually', fg='red', err=True)
+            sys.exit(1)
         else:
-            raise click.UsageError('Unable to determine length of video file, please specify --stop manually')
+            kwargs['stop'] = round(float(video_info['format']['duration']))
     if kwargs['start'] >= kwargs['stop']:
         raise click.BadOptionUsage('start', '--start must be before --stop')
     if os.path.exists(output_file):
@@ -264,16 +272,20 @@ def cli_gif_preview(**kwargs):
                 gif_file = f'{tmp}/{kwargs["start"]}.gif'
                 tmp_file.write(f'file {gif_file}\n')
                 cmd = f'{ffmpeg} -i {input_file} -ss {kwargs["start"]} -t {kwargs["length"]} -vf {quote(video_filter)} -loop 1 {gif_file}'
-                mkgif = run_cmd(cmd)
-                if mkgif.returncode != 0:
+                try:
+                    mkgif = run_cmd(cmd)
+                except SubprocessError:
                     click.secho('ffmpeg returned non-zero status building gifs', fg='red', err=True)
                     sys.exit(mkgif.returncode)
-                log.info(f'Wrote: {gif_file}')
-                kwargs['start'] += kwargs['step']
-                bar.update(kwargs['step'], current_item=kwargs['start'])
+                else:
+                    log.info(f'Wrote: {gif_file}')
+                    kwargs['start'] += kwargs['step']
+                    bar.update(kwargs['step'], current_item=kwargs['start'])
         log.info('Combining gif previews into single file')
         cmd = f'{ffmpeg} -f concat -safe 0 -i {tmp_file.name} -ignore_loop 1 {output_file}'
-        if run_cmd(cmd).returncode != 0:
+        try:
+            run_cmd(cmd)
+        except SubprocessError:
             click.secho('ffmpeg returned non-zero status combining gifs', fg='red', err=True)
         else:
             click.secho(f'Created preview GIF: {output_file}', fg='green')
@@ -289,21 +301,27 @@ def cli_extract(**kwargs):
     """
     global log
     ffmpeg = locate_binary('ffmpeg')
-    video_length = round(float(probe_metadata(kwargs['file'])['format']['duration']))
-    padding = len(str(video_length))
-    total_frames = video_length // kwargs['step']
-    video_filter = f'fps=1/{kwargs["step"]},drawtext=fontfile=/Library/Fonts/Arial.ttf:fontsize=45:fontcolor=yellow:box=1:boxcolor=black:x=(W-tw)/2:y=H-th-10:' + r'text="%{pts\:hms}"'
-    cmd = f'{ffmpeg} -i {quote(str(kwargs["file"]))} -vf {quote(video_filter)} {str(kwargs["output"])}/img%0{padding}d.jpg'
-    log.info('Creating output directory')
-    kwargs['output'].mkdir(exist_ok=True)
-    log.info('Extracting frames')
-    with click.progressbar(label='Extracting frames', length=video_length) as bar:
-        try:
-            run_cmd(cmd)
-        except SubprocessError:
-            click.secho('ffmpeg returned non-zero status', fg='red', err=True)
-        else:
-            # I dislike doing this but click does not have an indeterminate progress bar 
-            bar.update(n_steps=video_length)
-    click.secho(f'Wrote {total_frames} screencaps to: {kwargs["output"]}/', fg='green')
+    try:
+        video_info = probe_metadata(kwargs['file'])
+    except SubprocessError:
+        click.secho('Unable to determine video duration.', fg='red', err=True)
+        sys.exit(1)
+    else:
+        video_length = round(float(video_info['format']['duration']))
+        padding = len(str(video_length))
+        total_frames = video_length // kwargs['step']
+        video_filter = f'fps=1/{kwargs["step"]},drawtext=fontfile=/Library/Fonts/Arial.ttf:fontsize=45:fontcolor=yellow:box=1:boxcolor=black:x=(W-tw)/2:y=H-th-10:' + r'text="%{pts\:hms}"'
+        cmd = f'{ffmpeg} -i {quote(str(kwargs["file"]))} -vf {quote(video_filter)} {str(kwargs["output"])}/img%0{padding}d.jpg'
+        log.info('Creating output directory')
+        kwargs['output'].mkdir(exist_ok=True)
+        log.info('Extracting frames')
+        with click.progressbar(label='Extracting frames', length=video_length) as bar:
+            try:
+                run_cmd(cmd)
+            except SubprocessError:
+                click.secho('ffmpeg returned non-zero status', fg='red', err=True)
+            else:
+                # I dislike doing this but click does not have an indeterminate progress bar 
+                bar.update(n_steps=video_length)
+        click.secho(f'Wrote {total_frames} screencaps to: {kwargs["output"]}/', fg='green')
     sys.exit(0)
