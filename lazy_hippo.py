@@ -328,5 +328,5 @@ def cli_extract(**kwargs):
             else:
                 # I dislike doing this but click does not have an indeterminate progress bar 
                 bar.update(n_steps=video_length)
-                click.secho(f'Wrote {total_frames} screencaps to: {kwargs["output"]}/', fg='green')
-                sys.exit(0)
+        click.secho(f'Wrote {total_frames} screencaps to: {kwargs["output"]}/', fg='green')
+        sys.exit(0)
