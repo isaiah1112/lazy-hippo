@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 log_handler = logging.StreamHandler()
 log_handler.setFormatter(logging.Formatter('%(levelname)s:%(funcName)s:%(message)s'))
 log.addHandler(log_handler)
-log.setLevel(logging.WARNING)
+log.setLevel(logging.CRITICAL)
 log.propagate = False  # Keeps our messages out of the root logger.
 
 
@@ -49,12 +49,12 @@ def locate_binary(command: str) -> str:
     :returntype: str
     :raises: click.UsageError
     """
-    global log
-    locate_binary = run('which ' + command, shell=True, capture_output=True)
-    if locate_binary.returncode == 0 and len(locate_binary.stdout) > 0:
-        return locate_binary.stdout.strip().decode()
+    try:
+        binary_path = run_cmd(f'which {command}')
+    except SubprocessError as err:
+        raise click.UsageError(f'Unable to locate {command}. Is it installed?') from err
     else:
-        raise click.UsageError(f'Unable to locate {command} binary. Is it installed?')
+        return binary_path.stdout.strip().decode()
     
 def probe_metadata(video_file: Path, short: bool = True) -> dict:
     """ Use `ffprobe` to extract video metadata
@@ -74,7 +74,6 @@ def probe_metadata(video_file: Path, short: bool = True) -> dict:
     else:
         cmd = f'{ffprobe} -v quiet -print_format json -show_format -show_streams {quote(str(video_file))}'
     video_metadata = run_cmd(cmd)
-    video_metadata.check_returncode()
     return json.loads(video_metadata.stdout)
     
     
@@ -137,6 +136,7 @@ def cli_split(**kwargs):
                     run_cmd(cmd)
                 except SubprocessError:
                     click.secho('ffmpeg returned non-zero status', fg='red', err=True)
+                    sys.exit(1)
     elif kwargs['every'] > 0:
         try:
             video_info = probe_metadata(kwargs['file'])
@@ -151,6 +151,7 @@ def cli_split(**kwargs):
                 run_cmd(cmd)
             except SubprocessError:
                 click.secho('ffmpeg returned non-zero status', fg='red', err=True)
+                sys.exit(1)
             else:
                 click.secho(f'Split of file {input_file} completed...', fg='green')
     sys.exit(0)
@@ -174,11 +175,12 @@ def cli_join(**kwargs):
         run_cmd(cmd)
     except SubprocessError:
         click.secho('ffmpeg returned non-zero status', fg='red', err=True)
+        sys.exit(1)
     else:
         click.secho(f'Joined {len(kwargs["file"])} files into {kwargs["output"]}', fg='green')
+        sys.exit(0)
     finally:
         os.remove(tf.name)  # Clean up our temporary file
-    sys.exit(0)
 
 @cli.command('info', short_help='Get Video Metadata')
 @click.option('--format', '-f', type=click.Choice(['txt', 'json']), default='txt', help='Format of output')
@@ -191,6 +193,7 @@ def cli_info(**kwargs):
         video_info = probe_metadata(kwargs['file'], short=False)
     except SubprocessError:
         click.secho('ffprobe returned non-zero status', fg='red', err=True)
+        sys.exit(1)
     else:
         if kwargs['format'] == 'json':
             click.echo(json.dumps(video_info, indent=2))
@@ -210,7 +213,7 @@ def cli_info(**kwargs):
             for k, v in video_stream[0].items():
                 if k in stream_entries:
                     click.echo(f'{k}: {v}')
-    sys.exit(0)
+        sys.exit(0)
     
 @cli.command('repack', short_help='Change Video Container')
 @click.option('--format', '-f', type=click.Choice(['mkv', 'mp4']), default='mp4', help='Format of output')
@@ -230,9 +233,10 @@ def cli_repack(**kwargs):
             os.remove(new_file)  # ffmpeg doesn't clean up files when repackaging fails
         finally:
             click.secho('ffmpeg returned non-zero status', fg='red', err=True)
+            sys.exit(1)
     else:
         click.secho(f'Repackaged: {kwargs["file"]} to: {new_file}', fg='green')
-    sys.exit(0)
+        sys.exit(0)
     
 @cli.command('gif-preview', short_help='Create a GIF')
 @click.option('--start', default=0, type=TimeStamp(), help='Starting timestamp')
@@ -254,9 +258,8 @@ def cli_gif_preview(**kwargs):
     if kwargs['stop'] == -1:
         try:
             video_info = probe_metadata(kwargs['file'])
-        except SubprocessError:
-            click.secho('Unable to determine length of video file, please specify --stop manually', fg='red', err=True)
-            sys.exit(1)
+        except SubprocessError as err:
+            raise click.BadArgumentUsage('Unable to detrmine duration of video file. Please specify --stop manually') from err
         else:
             kwargs['stop'] = round(float(video_info['format']['duration']))
     if kwargs['start'] >= kwargs['stop']:
@@ -288,9 +291,10 @@ def cli_gif_preview(**kwargs):
             run_cmd(cmd)
         except SubprocessError:
             click.secho('ffmpeg returned non-zero status combining gifs', fg='red', err=True)
+            sys.exit(1)
         else:
             click.secho(f'Created preview GIF: {output_file}', fg='green')
-    sys.exit(0)
+            sys.exit(0)
     
 @cli.command('extract', short_help='Extract Screencaps')
 @click.option('--step', '-s', default=60, help='Seconds between frames')
@@ -304,9 +308,8 @@ def cli_extract(**kwargs):
     ffmpeg = locate_binary('ffmpeg')
     try:
         video_info = probe_metadata(kwargs['file'])
-    except SubprocessError:
-        click.secho('Unable to determine video duration.', fg='red', err=True)
-        sys.exit(1)
+    except SubprocessError as err:
+        raise click.BadArgumentUsage('Unable to determine video duration') from err
     else:
         video_length = round(float(video_info['format']['duration']))
         padding = len(str(video_length))
@@ -321,8 +324,9 @@ def cli_extract(**kwargs):
                 run_cmd(cmd)
             except SubprocessError:
                 click.secho('ffmpeg returned non-zero status', fg='red', err=True)
+                sys.exit(1)
             else:
                 # I dislike doing this but click does not have an indeterminate progress bar 
                 bar.update(n_steps=video_length)
-        click.secho(f'Wrote {total_frames} screencaps to: {kwargs["output"]}/', fg='green')
-    sys.exit(0)
+                click.secho(f'Wrote {total_frames} screencaps to: {kwargs["output"]}/', fg='green')
+                sys.exit(0)
