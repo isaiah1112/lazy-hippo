@@ -136,7 +136,7 @@ class TestRunCmd(unittest.TestCase):
         """Test running a command that fails"""
         mock_result = Mock()
         mock_result.returncode = 1
-        mock_result.check_returncode.side_effect = Exception('Non-zero return code')
+        mock_result.check_returncode.side_effect = CalledProcessError(1,'Non-zero return code')
         mock_run.return_value = mock_result
 
         with self.assertRaises(CalledProcessError):
