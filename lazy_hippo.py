@@ -7,7 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 from shlex import quote
-from subprocess import CompletedProcess, SubprocessError, run
+from subprocess import CalledProcessError, CompletedProcess, SubprocessError, run
 
 import click
 
@@ -32,7 +32,10 @@ class TimeStamp(click.ParamType):
             ts = value.split(':')
             new_ts = 0
             for idx, x in enumerate(reversed(ts)):
-                new_ts += (int(x) * (60 ** idx))
+                try:
+                    new_ts += (int(x) * (60 ** idx))
+                except ValueError:
+                    self.fail(f'{value!r} is not a valid timestamp string', param, ctx)
             return int(new_ts)
         except TypeError:
             self.fail(f'{value!r} is not a valid timestamp string', param, ctx)
@@ -51,7 +54,7 @@ def locate_binary(command: str) -> str:
     """
     try:
         binary_path = run_cmd(f'which {command}')
-    except SubprocessError as err:
+    except CalledProcessError as err:
         raise click.UsageError(f'Unable to locate {command}. Is it installed?') from err
     else:
         return binary_path.stdout.strip().decode()
