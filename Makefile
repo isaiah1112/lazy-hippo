@@ -7,6 +7,8 @@ help:
 	@echo "\nTargets:"
 	@echo "  install [UV_INSTALL]    Install project"
 	@echo "  lint    Run 'ruff' linting on project"
+	@echo "  test    Run unittests for project"
+	@echo "  coverage    Generate html coverage report"
 
 # Install UV if it is not installed
 .PHONY: uv-init
@@ -30,5 +32,5 @@ test: uv-init
 	@uv run --group test coverage run -m unittest discover tests/
 
 .PHONY: coverage
-test-coverage: test
+coverage: test
 	@uv run --group test coverage html
