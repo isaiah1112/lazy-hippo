@@ -24,3 +24,11 @@ install:
 .PHONY: lint
 lint: uv-init
 	@uv run --group test ruff check lazy_hippo.py
+
+.PHONY: test
+test: uv-init
+	@uv run --group test coverage run -m unittest discover tests/
+
+.PHONY: coverage
+test-coverage: test
+	@uv run --group test coverage html
