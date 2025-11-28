@@ -7,7 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 from shlex import quote
-from subprocess import CompletedProcess, SubprocessError, run
+from subprocess import CalledProcessError, CompletedProcess, SubprocessError, run
 
 import click
 
@@ -32,7 +32,10 @@ class TimeStamp(click.ParamType):
             ts = value.split(':')
             new_ts = 0
             for idx, x in enumerate(reversed(ts)):
-                new_ts += (int(x) * (60 ** idx))
+                try:
+                    new_ts += (int(x) * (60 ** idx))
+                except ValueError:
+                    self.fail(f'{value!r} is not a valid timestamp string', param, ctx)
             return int(new_ts)
         except TypeError:
             self.fail(f'{value!r} is not a valid timestamp string', param, ctx)
@@ -51,7 +54,7 @@ def locate_binary(command: str) -> str:
     """
     try:
         binary_path = run_cmd(f'which {command}')
-    except SubprocessError as err:
+    except CalledProcessError as err:
         raise click.UsageError(f'Unable to locate {command}. Is it installed?') from err
     else:
         return binary_path.stdout.strip().decode()
@@ -298,6 +301,7 @@ def cli_gif_preview(**kwargs):
     
 @cli.command('extract', short_help='Extract Screencaps')
 @click.option('--step', '-s', default=60, help='Seconds between frames')
+@click.option('--timestamp/--no-timestamp', is_flag=True, default=True, help='Include timestamp on frame')
 @click.option('--output', '-o', default=Path('screencaps'), type=click.Path(file_okay=False, exists=False, path_type=Path),
               help='Output directory')
 @click.argument('file', type=click.Path(exists=True, dir_okay=False, path_type=Path))
@@ -314,7 +318,9 @@ def cli_extract(**kwargs):
         video_length = round(float(video_info['format']['duration']))
         padding = len(str(video_length))
         total_frames = video_length // kwargs['step']
-        video_filter = f'fps=1/{kwargs["step"]},drawtext=fontfile=/Library/Fonts/Arial.ttf:fontsize=45:fontcolor=yellow:box=1:boxcolor=black:x=(W-tw)/2:y=H-th-10:' + r'text="%{pts\:hms}"'
+        video_filter = f'fps=1/{kwargs["step"]}'
+        if kwargs['timestamp']:
+                video_filter += r",drawtext=fontsize=45:fontcolor=white:box=1:boxcolor=black:x=(W-tw)/2:y=(H-th-10):text='%{pts\:hms}'"
         cmd = f'{ffmpeg} -i {quote(str(kwargs["file"]))} -vf {quote(video_filter)} {str(kwargs["output"])}/img%0{padding}d.jpg'
         log.info('Creating output directory')
         kwargs['output'].mkdir(exist_ok=True)
