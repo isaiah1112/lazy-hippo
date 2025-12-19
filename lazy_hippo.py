@@ -54,11 +54,13 @@ def locate_binary(command: str) -> str:
     :returntype: str
     :raises: click.UsageError
     """
+    global log
     try:
         binary_path = run_cmd(f'which {command}')
     except CalledProcessError as err:
         raise click.UsageError(f'Unable to locate {command}. Is it installed?') from err
     else:
+        log.info(binary_path.stdout.strip().decode())
         return binary_path.stdout.strip().decode()
     
 def probe_metadata(video_file: Path, short: bool = True) -> dict:
