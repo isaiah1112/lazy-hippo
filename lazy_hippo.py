@@ -11,6 +11,8 @@ from subprocess import CalledProcessError, CompletedProcess, SubprocessError, ru
 
 import click
 
+debug = False
+verbose = 0
 log = logging.getLogger(__name__)
 log_handler = logging.StreamHandler()
 log_handler.setFormatter(logging.Formatter('%(levelname)s:%(funcName)s:%(message)s'))
@@ -104,7 +106,9 @@ def run_cmd(cmd: str) -> CompletedProcess:
 def cli(**kwargs):
     """ Easily work with video files
     """
-    global log
+    global debug, verbose, log
+    debug = kwargs['debug']
+    verbose = kwargs['verbose']
     if kwargs['debug']:
         if kwargs['verbose']:
             log.setLevel(logging.DEBUG)
@@ -252,7 +256,7 @@ def cli_repack(**kwargs):
 def cli_gif_preview(**kwargs):
     """ Generate a GIF from a video
     """
-    global log
+    global debug, log
     ffmpeg = locate_binary('ffmpeg')
     input_file = str(kwargs['file'])
     output_file = str(kwargs['file'].with_suffix('.gif'))
@@ -274,7 +278,7 @@ def cli_gif_preview(**kwargs):
             sys.exit(0)
     with tempfile.TemporaryDirectory() as tmp:
         log.info(f'Generating gif previews in: {tmp}')
-        with open(tmp + '/files.txt', 'w') as tmp_file, click.progressbar(length=kwargs['stop'], label='Generating gifs') as bar:
+        with open(tmp + '/files.txt', 'w') as tmp_file, click.progressbar(length=kwargs['stop'], label='Generating gifs', hidden=debug) as bar:
             while kwargs['start'] < kwargs['stop']:
                 gif_file = f'{tmp}/{kwargs["start"]}.gif'
                 tmp_file.write(f'file {gif_file}\n')
@@ -308,7 +312,7 @@ def cli_gif_preview(**kwargs):
 def cli_extract(**kwargs):
     """ Extract screen captures on a timed interval
     """
-    global log
+    global debug, log
     ffmpeg = locate_binary('ffmpeg')
     try:
         video_info = probe_metadata(kwargs['file'])
@@ -325,7 +329,7 @@ def cli_extract(**kwargs):
         log.info('Creating output directory')
         kwargs['output'].mkdir(exist_ok=True)
         log.info('Extracting frames')
-        with click.progressbar(label='Extracting frames', length=video_length) as bar:
+        with click.progressbar(label='Extracting frames', length=video_length, hidden=debug) as bar:
             try:
                 run_cmd(cmd)
             except SubprocessError:
