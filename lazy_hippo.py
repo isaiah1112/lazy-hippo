@@ -147,22 +147,16 @@ def cli_split(**kwargs):
                     click.secho('ffmpeg returned non-zero status', fg='red', err=True)
                     sys.exit(1)
     elif kwargs['every'] > 0:
+        click.secho(f'Splitting video every {kwargs["every"]} seconds...')
+        new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-%03d{kwargs["file"].suffix}'))
+        cmd = f'{ffmpeg} -i {quote(input_file)} -c copy -map 0 -f segment -segment_time {kwargs["every"]} -reset_timestamps 1 -segment_format_options movflags=+faststart {quote(new_file)}'
         try:
-            video_info = probe_metadata(kwargs['file'])
+            run_cmd(cmd)
         except SubprocessError:
-            click.secho('Unable to determine video duration', fg='red', err=True)
+            click.secho('ffmpeg returned non-zero status', fg='red', err=True)
+            sys.exit(1)
         else:
-            padding = len(video_info['format']['duration'].split('.')[0])
-            click.secho(f'Splitting video every {kwargs["every"]} seconds...')
-            new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-%0{padding}d{kwargs["file"].suffix}'))
-            cmd = f'{ffmpeg} -i {quote(input_file)} -c copy -map 0 -f segment -segment_time {kwargs["every"]} -reset_timestamps 1 -segment_format_options movflags=+faststart {quote(new_file)}'
-            try:
-                run_cmd(cmd)
-            except SubprocessError:
-                click.secho('ffmpeg returned non-zero status', fg='red', err=True)
-                sys.exit(1)
-            else:
-                click.secho(f'Split of file {input_file} completed...', fg='green')
+            click.secho(f'Split of file {input_file} completed...', fg='green')
     sys.exit(0)
 
 
