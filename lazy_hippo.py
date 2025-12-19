@@ -299,10 +299,11 @@ def cli_gif_preview(**kwargs):
             click.secho(f'Created preview GIF: {output_file}', fg='green')
             sys.exit(0)
     
-@cli.command('extract', short_help='Extract Screencaps')
+@cli.command('extract', short_help='Extract Frames')
 @click.option('--step', '-s', default=60, help='Seconds between frames')
+@click.option('--every-frame', default=False, is_flag=True, help='Extract every frame (ignores --step)')
 @click.option('--timestamp/--no-timestamp', is_flag=True, default=True, help='Include timestamp on frame')
-@click.option('--output', '-o', default=Path('screencaps'), type=click.Path(file_okay=False, exists=False, path_type=Path),
+@click.option('--output', '-o', default=Path('extracted_frames'), type=click.Path(file_okay=False, exists=False, path_type=Path),
               help='Output directory')
 @click.argument('file', type=click.Path(exists=True, dir_okay=False, path_type=Path))
 def cli_extract(**kwargs):
@@ -311,21 +312,29 @@ def cli_extract(**kwargs):
     global debug, log
     ffmpeg = locate_binary('ffmpeg')
     try:
-        video_info = probe_metadata(kwargs['file'])
+        video_info = probe_metadata(kwargs['file'], short=False)
     except SubprocessError as err:
         raise click.BadArgumentUsage('Unable to determine video duration') from err
     else:
-        video_length = round(float(video_info['format']['duration']))
-        padding = len(str(video_length))
-        total_frames = video_length // kwargs['step']
-        video_filter = f'fps=1/{kwargs["step"]}'
-        if kwargs['timestamp']:
-                video_filter += r",drawtext=fontsize=45:fontcolor=white:box=1:boxcolor=black:x=(W-tw)/2:y=(H-th-10):text='%{pts\:hms}'"
-        cmd = f'{ffmpeg} -i {quote(str(kwargs["file"]))} -vf {quote(video_filter)} {str(kwargs["output"])}/img%0{padding}d.jpg'
+        other_opts = '-vsync vfr -q:v 2'  # prevent frame duplication and set to high JPEG quality
+        if kwargs['every_frame']:
+            total_frames = video_info['streams'][0]['nb_frames']
+            click.echo(f'Extracting every frame will create a {total_frames} files.')
+            if click.confirm('Do you wish to continue?', default=False):
+                video_filter = r'select=eq(pict_type\,I)'
+            else:
+                exit(0)
+        else:
+            video_length = round(float(video_info['format']['duration']))
+            total_frames = video_length // kwargs['step']
+            video_filter = f'fps=1/{kwargs["step"]}'
+            if kwargs['timestamp']:
+                    video_filter += r",drawtext=fontsize=45:fontcolor=white:box=1:boxcolor=black:x=(W-tw)/2:y=(H-th-10):text='%{pts\:hms}'"
+        cmd = f'{ffmpeg} -i {quote(str(kwargs["file"]))} -vf {quote(video_filter)} {other_opts} {str(kwargs["output"])}/img%03d.jpg'
         log.info('Creating output directory')
         kwargs['output'].mkdir(exist_ok=True)
         log.info('Extracting frames')
-        with click.progressbar(label='Extracting frames', length=video_length, hidden=debug) as bar:
+        with click.progressbar(label=f'Extracting {total_frames} frames', length=total_frames, hidden=debug) as bar:
             try:
                 run_cmd(cmd)
             except SubprocessError:
@@ -333,6 +342,6 @@ def cli_extract(**kwargs):
                 sys.exit(1)
             else:
                 # I dislike doing this but click does not have an indeterminate progress bar 
-                bar.update(n_steps=video_length)
-        click.secho(f'Wrote {total_frames} screencaps to: {kwargs["output"]}/', fg='green')
+                bar.update(n_steps=total_frames)
+        click.secho(f'Wrote screencaps to: {kwargs["output"]}/', fg='green')
         sys.exit(0)
