@@ -26,7 +26,7 @@ jobs:
         pip install uv
     - name: Lint with ruff
       run: |
-        uv run --group test ruff check lazy_hippo
+        uv run --group test ruff check lazy_hippo.py
     - name: Run Tests
       run: |
         uv run --group test pytest
