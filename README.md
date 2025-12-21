@@ -1,5 +1,7 @@
 ![logo](./logo.png "Lazy Hippo")
 
+[![Python Tests](https://github.com/isaiah1112/lazy-hippo/actions/workflows/python-tests.yml/badge.svg)](https://github.com/isaiah1112/lazy-hippo/actions/workflows/python-tests.yml)
+
 # lazy-hippo
 
 `lazy-hippo` is a small command-line utility for manipulating video files without re-encoding, built on top of `ffmpeg` and `ffprobe`.

@@ -29,7 +29,7 @@ lint: uv-init
 
 .PHONY: test
 test: uv-init
-	@uv run --group test coverage run -m unittest discover tests/
+	@uv run --group test coverage run -m pytest
 
 .PHONY: coverage
 coverage: test
