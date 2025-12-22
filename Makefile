@@ -6,8 +6,7 @@ help:
 	@echo "Usage: make <target> [option]"
 	@echo "\nTargets:"
 	@echo "  install [UV_INSTALL]    Install project"
-	@echo "  lint    Run 'ruff' linting on project"
-	@echo "  type    Run 'ty' type checking on project"
+	@echo "  lint    Run 'ruff' linting and 'ty' type-checking on project"
 	@echo "  test    Run unittests for project"
 	@echo "  coverage    Generate html coverage report"
 
@@ -27,9 +26,6 @@ install:
 .PHONY: lint
 lint: uv-init
 	@uv run --group test ruff check lazy_hippo.py
-
-.PHONY: type
-type: uv-init
 	@uv run --group test ty check lazy_hippo.py
 
 .PHONY: test
