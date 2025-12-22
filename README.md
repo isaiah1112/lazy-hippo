@@ -1,6 +1,6 @@
 ![logo](./logo.png "Lazy Hippo")
 
-[![Python Tests](https://github.com/isaiah1112/lazy-hippo/actions/workflows/python-tests.yml/badge.svg)](https://github.com/isaiah1112/lazy-hippo/actions/workflows/python-tests.yml)
+[![Python Tests](https://github.com/isaiah1112/lazy-hippo/actions/workflows/lint-and-test.yml/badge.svg)](https://github.com/isaiah1112/lazy-hippo/actions/workflows/lint-and-test.yml)
 
 # lazy-hippo
 
