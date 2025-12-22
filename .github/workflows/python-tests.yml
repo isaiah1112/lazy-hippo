@@ -27,6 +27,9 @@ jobs:
     - name: Lint with ruff
       run: |
         uv run --group test ruff check lazy_hippo.py
+    - name: Type Checking with ty
+      run: |
+        uv run --group test ty check lazy_hippo.py
     - name: Run Tests
       run: |
         uv run --group test pytest
