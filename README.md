@@ -52,7 +52,6 @@ pip install -e .
 ```
 
 ## Dependencies
-- Python 3.11+
 - ffmpeg
 - ffprobe
 

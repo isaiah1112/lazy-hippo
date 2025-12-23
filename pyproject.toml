@@ -1,6 +1,6 @@
 [project]
 name = "lazy-hippo"
-version = "0.7.0"
+version = "0.8.0"
 description = "Utility for manipulating video files without re-encoding"
 authors = [{ name = "Jesse Almanrode", email = "jesse@almanrode.com" }]
 requires-python = ">=3.10,<4.0"
