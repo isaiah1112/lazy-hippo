@@ -1,5 +1,7 @@
 ![logo](./logo.png "Lazy Hippo")
 
+[![Python Tests](https://github.com/isaiah1112/lazy-hippo/actions/workflows/lint-and-test.yml/badge.svg)](https://github.com/isaiah1112/lazy-hippo/actions/workflows/lint-and-test.yml)
+
 # lazy-hippo
 
 `lazy-hippo` is a small command-line utility for manipulating video files without re-encoding, built on top of `ffmpeg` and `ffprobe`.
@@ -50,7 +52,6 @@ pip install -e .
 ```
 
 ## Dependencies
-- Python 3.11+
 - ffmpeg
 - ffprobe
 
@@ -147,7 +148,7 @@ lazy-hippo extract input.mp4
 MIT License
 
 ## Supported Python Versions
-This project supports Python 3.11 and later.
+This project runs on the [latest supported Python versions.](https://devguide.python.org/versions/)
 
 ## Contact / Support
 Open an issue on the repository for bugs and feature requests.

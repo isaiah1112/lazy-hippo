@@ -11,6 +11,8 @@ from subprocess import CalledProcessError, CompletedProcess, SubprocessError, ru
 
 import click
 
+debug = False
+verbose = 0
 log = logging.getLogger(__name__)
 log_handler = logging.StreamHandler()
 log_handler.setFormatter(logging.Formatter('%(levelname)s:%(funcName)s:%(message)s'))
@@ -52,11 +54,13 @@ def locate_binary(command: str) -> str:
     :returntype: str
     :raises: click.UsageError
     """
+    global log
     try:
         binary_path = run_cmd(f'which {command}')
     except CalledProcessError as err:
         raise click.UsageError(f'Unable to locate {command}. Is it installed?') from err
     else:
+        log.info(binary_path.stdout.strip().decode())
         return binary_path.stdout.strip().decode()
     
 def probe_metadata(video_file: Path, short: bool = True) -> dict:
@@ -104,7 +108,9 @@ def run_cmd(cmd: str) -> CompletedProcess:
 def cli(**kwargs):
     """ Easily work with video files
     """
-    global log
+    global debug, verbose, log
+    debug = kwargs['debug']
+    verbose = kwargs['verbose']
     if kwargs['debug']:
         if kwargs['verbose']:
             log.setLevel(logging.DEBUG)
@@ -141,22 +147,16 @@ def cli_split(**kwargs):
                     click.secho('ffmpeg returned non-zero status', fg='red', err=True)
                     sys.exit(1)
     elif kwargs['every'] > 0:
+        click.secho(f'Splitting video every {kwargs["every"]} seconds...')
+        new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-%03d{kwargs["file"].suffix}'))
+        cmd = f'{ffmpeg} -i {quote(input_file)} -c copy -map 0 -f segment -segment_time {kwargs["every"]} -reset_timestamps 1 -segment_format_options movflags=+faststart {quote(new_file)}'
         try:
-            video_info = probe_metadata(kwargs['file'])
+            run_cmd(cmd)
         except SubprocessError:
-            click.secho('Unable to determine video duration', fg='red', err=True)
+            click.secho('ffmpeg returned non-zero status', fg='red', err=True)
+            sys.exit(1)
         else:
-            padding = len(video_info['format']['duration'].split('.')[0])
-            click.secho(f'Splitting video every {kwargs["every"]} seconds...')
-            new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-%0{padding}d{kwargs["file"].suffix}'))
-            cmd = f'{ffmpeg} -i {quote(input_file)} -c copy -map 0 -f segment -segment_time {kwargs["every"]} -reset_timestamps 1 -segment_format_options movflags=+faststart {quote(new_file)}'
-            try:
-                run_cmd(cmd)
-            except SubprocessError:
-                click.secho('ffmpeg returned non-zero status', fg='red', err=True)
-                sys.exit(1)
-            else:
-                click.secho(f'Split of file {input_file} completed...', fg='green')
+            click.secho(f'Split of file {input_file} completed...', fg='green')
     sys.exit(0)
 
 
@@ -252,7 +252,7 @@ def cli_repack(**kwargs):
 def cli_gif_preview(**kwargs):
     """ Generate a GIF from a video
     """
-    global log
+    global debug, log
     ffmpeg = locate_binary('ffmpeg')
     input_file = str(kwargs['file'])
     output_file = str(kwargs['file'].with_suffix('.gif'))
@@ -274,7 +274,7 @@ def cli_gif_preview(**kwargs):
             sys.exit(0)
     with tempfile.TemporaryDirectory() as tmp:
         log.info(f'Generating gif previews in: {tmp}')
-        with open(tmp + '/files.txt', 'w') as tmp_file, click.progressbar(length=kwargs['stop'], label='Generating gifs') as bar:
+        with open(tmp + '/files.txt', 'w') as tmp_file, click.progressbar(length=kwargs['stop'], label='Generating gifs', hidden=debug) as bar:
             while kwargs['start'] < kwargs['stop']:
                 gif_file = f'{tmp}/{kwargs["start"]}.gif'
                 tmp_file.write(f'file {gif_file}\n')
@@ -299,33 +299,42 @@ def cli_gif_preview(**kwargs):
             click.secho(f'Created preview GIF: {output_file}', fg='green')
             sys.exit(0)
     
-@cli.command('extract', short_help='Extract Screencaps')
+@cli.command('extract', short_help='Extract Frames')
 @click.option('--step', '-s', default=60, help='Seconds between frames')
+@click.option('--every-frame', default=False, is_flag=True, help='Extract every frame (ignores --step)')
 @click.option('--timestamp/--no-timestamp', is_flag=True, default=True, help='Include timestamp on frame')
-@click.option('--output', '-o', default=Path('screencaps'), type=click.Path(file_okay=False, exists=False, path_type=Path),
+@click.option('--output', '-o', default=Path('extracted_frames'), type=click.Path(file_okay=False, exists=False, path_type=Path),
               help='Output directory')
 @click.argument('file', type=click.Path(exists=True, dir_okay=False, path_type=Path))
 def cli_extract(**kwargs):
     """ Extract screen captures on a timed interval
     """
-    global log
+    global debug, log
     ffmpeg = locate_binary('ffmpeg')
     try:
-        video_info = probe_metadata(kwargs['file'])
+        video_info = probe_metadata(kwargs['file'], short=False)
     except SubprocessError as err:
         raise click.BadArgumentUsage('Unable to determine video duration') from err
     else:
-        video_length = round(float(video_info['format']['duration']))
-        padding = len(str(video_length))
-        total_frames = video_length // kwargs['step']
-        video_filter = f'fps=1/{kwargs["step"]}'
-        if kwargs['timestamp']:
-                video_filter += r",drawtext=fontsize=45:fontcolor=white:box=1:boxcolor=black:x=(W-tw)/2:y=(H-th-10):text='%{pts\:hms}'"
-        cmd = f'{ffmpeg} -i {quote(str(kwargs["file"]))} -vf {quote(video_filter)} {str(kwargs["output"])}/img%0{padding}d.jpg'
+        other_opts = '-vsync vfr -q:v 2'  # prevent frame duplication and set to high JPEG quality
+        if kwargs['every_frame']:
+            total_frames = video_info['streams'][0]['nb_frames']
+            click.echo(f'Extracting every frame will create a {total_frames} files.')
+            if click.confirm('Do you wish to continue?', default=False):
+                video_filter = r'select=eq(pict_type\,I)'
+            else:
+                exit(0)
+        else:
+            video_length = round(float(video_info['format']['duration']))
+            total_frames = video_length // kwargs['step']
+            video_filter = f'fps=1/{kwargs["step"]}'
+            if kwargs['timestamp']:
+                    video_filter += r",drawtext=fontsize=45:fontcolor=white:box=1:boxcolor=black:x=(W-tw)/2:y=(H-th-10):text='%{pts\:hms}'"
+        cmd = f'{ffmpeg} -i {quote(str(kwargs["file"]))} -vf {quote(video_filter)} {other_opts} {str(kwargs["output"])}/img%03d.jpg'
         log.info('Creating output directory')
         kwargs['output'].mkdir(exist_ok=True)
         log.info('Extracting frames')
-        with click.progressbar(label='Extracting frames', length=video_length) as bar:
+        with click.progressbar(label=f'Extracting {total_frames} frames', length=total_frames, hidden=debug) as bar:
             try:
                 run_cmd(cmd)
             except SubprocessError:
@@ -333,6 +342,6 @@ def cli_extract(**kwargs):
                 sys.exit(1)
             else:
                 # I dislike doing this but click does not have an indeterminate progress bar 
-                bar.update(n_steps=video_length)
-        click.secho(f'Wrote {total_frames} screencaps to: {kwargs["output"]}/', fg='green')
+                bar.update(n_steps=total_frames)
+        click.secho(f'Wrote screencaps to: {kwargs["output"]}/', fg='green')
         sys.exit(0)
