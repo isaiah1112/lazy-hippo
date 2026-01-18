@@ -278,18 +278,18 @@ def cli_gif_preview(**kwargs):
             while kwargs['start'] < kwargs['stop']:
                 gif_file = f'{tmp}/{kwargs["start"]}.gif'
                 tmp_file.write(f'file {gif_file}\n')
-                cmd = f'{ffmpeg} -i {input_file} -ss {kwargs["start"]} -t {kwargs["length"]} -vf {quote(video_filter)} -loop 1 {gif_file}'
+                cmd = f'{ffmpeg} -i {quote(input_file)} -ss {kwargs["start"]} -t {kwargs["length"]} -vf {quote(video_filter)} -loop 1 {gif_file}'
                 try:
-                    mkgif = run_cmd(cmd)
+                    run_cmd(cmd)
                 except SubprocessError:
                     click.secho('ffmpeg returned non-zero status building gifs', fg='red', err=True)
-                    sys.exit(mkgif.returncode)
+                    sys.exit(1)
                 else:
                     log.info(f'Wrote: {gif_file}')
                     kwargs['start'] += kwargs['step']
                     bar.update(kwargs['step'], current_item=kwargs['start'])
         log.info('Combining gif previews into single file')
-        cmd = f'{ffmpeg} -f concat -safe 0 -i {tmp_file.name} -ignore_loop 1 {output_file}'
+        cmd = f'{ffmpeg} -f concat -safe 0 -i {tmp_file.name} -ignore_loop 1 {quote(output_file)}'
         try:
             run_cmd(cmd)
         except SubprocessError:
