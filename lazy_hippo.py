@@ -318,7 +318,7 @@ def cli_extract(**kwargs):
     else:
         other_opts = '-vsync vfr -q:v 2'  # prevent frame duplication and set to high JPEG quality
         if kwargs['every_frame']:
-            total_frames = video_info['streams'][0]['nb_frames']
+            total_frames = int(video_info['streams'][0]['nb_frames'])
             click.echo(f'Extracting every frame will create a {total_frames} files.')
             if click.confirm('Do you wish to continue?', default=False):
                 video_filter = r'select=eq(pict_type\,I)'
