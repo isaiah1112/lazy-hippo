@@ -23,23 +23,42 @@ log.propagate = False  # Keeps our messages out of the root logger.
 
 class TimeStamp(click.ParamType):
     name = "timestamp"
+    MAX_COMPONENTS = 3  # HH:MM:SS
 
     def convert(self, value, param, ctx):
+        """Convert various timestamp formats to seconds.
+        
+        Accepts:
+        - Integer (seconds)
+        - String in format 'SS', 'MM:SS', or 'HH:MM:SS'
+        """
         if isinstance(value, int):
+            if value < 0:
+                self.fail(f'{value} must be non-negative', param, ctx)
             return value
 
+        if not isinstance(value, str):
+            self.fail(f'{value!r} must be a string or integer', param, ctx)
+
+        components = value.split(':')
+        
+        if len(components) > self.MAX_COMPONENTS:
+            self.fail(f'{value!r} has too many components (max {self.MAX_COMPONENTS})', param, ctx)
+
         try:
-            if value.count(':') > 2:
-                self.fail(f'{value!r} is not a valid timestamp string', param, ctx)
-            ts = value.split(':')
-            new_ts = 0
-            for idx, x in enumerate(reversed(ts)):
-                try:
-                    new_ts += (int(x) * (60 ** idx))
-                except ValueError:
-                    self.fail(f'{value!r} is not a valid timestamp string', param, ctx)
-            return int(new_ts)
-        except TypeError:
+            # Validate and convert each component
+            int_components = []
+            for component in components:
+                val = int(component)
+                if val < 0:
+                    self.fail(f'timestamp component cannot be negative: {component!r}', param, ctx)
+                int_components.append(val)
+            
+            # Convert to seconds (reverse the list: SS, MM:SS, HH:MM:SS)
+            total_seconds = sum(val * (60 ** idx) for idx, val in enumerate(reversed(int_components)))
+            return total_seconds
+            
+        except ValueError:
             self.fail(f'{value!r} is not a valid timestamp string', param, ctx)
 
 
