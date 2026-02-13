@@ -29,12 +29,12 @@ class TimeStamp(click.ParamType):
         """Convert various timestamp formats to seconds.
         
         Accepts:
-        - Integer (seconds)
+        - Integer (seconds, or -1 for auto-detect)
         - String in format 'SS', 'MM:SS', or 'HH:MM:SS'
         """
         if isinstance(value, int):
-            if value < 0:
-                self.fail(f'{value} must be non-negative', param, ctx)
+            if value < -1:
+                self.fail(f'{value} must be non-negative or -1 for auto-detect', param, ctx)
             return value
 
         if not isinstance(value, str):

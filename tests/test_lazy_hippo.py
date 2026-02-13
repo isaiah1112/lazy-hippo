@@ -51,9 +51,14 @@ class TestTimeStamp(unittest.TestCase):
             self.ts.convert('abc:def', None, Mock(fail=Mock(side_effect=click.BadParameter)))
 
     def test_convert_negative_integer(self):
-        """Test that negative integer input raises an error"""
+        """Test that integer values less than -1 are rejected"""
         with self.assertRaises(click.BadParameter):
             self.ts.convert(-10, None, Mock(fail=Mock(side_effect=click.BadParameter)))
+
+    def test_convert_negative_one_allowed(self):
+        """Test that -1 is allowed (auto-detect sentinel value)"""
+        result = self.ts.convert(-1, None, None)
+        self.assertEqual(result, -1)
 
     def test_convert_negative_component(self):
         """Test that negative timestamp component raises an error"""
