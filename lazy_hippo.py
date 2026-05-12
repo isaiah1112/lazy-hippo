@@ -118,7 +118,14 @@ def run_cmd(cmd: list[str] | str) -> CompletedProcess:
     log.debug(process)
     process.check_returncode()
     return process
-    
+
+
+def format_command_error(exc: CalledProcessError) -> str:
+    stderr = getattr(exc, 'stderr', '')
+    if stderr:
+        return stderr.strip()
+    return f'Command failed with exit code {exc.returncode}'
+
 
 @click.group()
 @click.version_option()
@@ -164,7 +171,7 @@ def cli_split(**kwargs):
             try:
                 run_cmd(cmd)
             except SubprocessError as exc:
-                raise click.ClickException('ffmpeg returned non-zero status') from exc
+                raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
     elif kwargs['every'] > 0:
         click.secho(f'Splitting video every {kwargs["every"]} seconds...')
         new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-%03d{kwargs["file"].suffix}'))
@@ -172,7 +179,7 @@ def cli_split(**kwargs):
         try:
             run_cmd(cmd)
         except SubprocessError as exc:
-            raise click.ClickException('ffmpeg returned non-zero status') from exc
+            raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
         else:
             click.secho(f'Split of file {input_file} completed...', fg='green')
 
@@ -195,7 +202,7 @@ def cli_join(**kwargs):
     try:
         run_cmd(cmd)
     except SubprocessError as exc:
-        raise click.ClickException('ffmpeg returned non-zero status') from exc
+        raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
     else:
         click.secho(f'Joined {len(kwargs["file"])} files into {kwargs["output"]}', fg='green')
     finally:
@@ -210,7 +217,7 @@ def cli_info(**kwargs):
     try:
         video_info = probe_metadata(kwargs['file'], short=False)
     except SubprocessError as exc:
-        raise click.ClickException('ffprobe returned non-zero status') from exc
+        raise click.ClickException(f'ffprobe returned non-zero status: {format_command_error(exc)}') from exc
     if kwargs['format'] == 'json':
         click.echo(json.dumps(video_info, indent=2))
     else:
@@ -250,7 +257,7 @@ def cli_repack(**kwargs):
             os.remove(new_file)  # ffmpeg doesn't clean up files when repackaging fails
         except OSError:
             pass
-        raise click.ClickException('ffmpeg returned non-zero status') from exc
+        raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
     click.secho(f'Repackaged: {kwargs["file"]} to: {new_file}', fg='green')
     
 @cli.command('gif-preview', short_help='Create a GIF')
@@ -310,7 +317,7 @@ def cli_gif_preview(**kwargs):
                 try:
                     run_cmd(cmd)
                 except SubprocessError as exc:
-                    raise click.ClickException('ffmpeg returned non-zero status building gifs') from exc
+                    raise click.ClickException(f'ffmpeg returned non-zero status building gifs: {format_command_error(exc)}') from exc
                 log.info(f'Wrote: {gif_file}')
                 start += kwargs['step']
                 bar.update(kwargs['step'], current_item=start)
@@ -319,7 +326,7 @@ def cli_gif_preview(**kwargs):
         try:
             run_cmd(cmd)
         except SubprocessError as exc:
-            raise click.ClickException('ffmpeg returned non-zero status combining gifs') from exc
+            raise click.ClickException(f'ffmpeg returned non-zero status combining gifs: {format_command_error(exc)}') from exc
         click.secho(f'Created preview GIF: {output_file}', fg='green')
 
 @cli.command('extract', short_help='Extract Frames')
@@ -369,6 +376,6 @@ def cli_extract(**kwargs):
         try:
             run_cmd(cmd)
         except SubprocessError as exc:
-            raise click.ClickException('ffmpeg returned non-zero status') from exc
+            raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
         bar.update(n_steps=total_frames)
     click.secho(f'Wrote screencaps to: {kwargs["output"]}/', fg='green')
