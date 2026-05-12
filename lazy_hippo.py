@@ -39,6 +39,10 @@ class TimeStamp(click.ParamType):
         if not isinstance(value, str):
             self.fail(f'{value!r} must be a string or integer', param, ctx)
 
+        value = value.strip()
+        if value == '':
+            self.fail(f'{value!r} is not a valid timestamp string', param, ctx)
+
         components = value.split(':')
         
         if len(components) > self.MAX_COMPONENTS:
@@ -181,6 +185,8 @@ def cli_join(**kwargs):
     """ Join multiple files into a single file without re-encoding
     """
     ffmpeg = locate_binary('ffmpeg')
+    if len(kwargs['file']) == 0:
+        raise click.UsageError('At least one input file is required')
     with tempfile.NamedTemporaryFile('w', dir=os.getcwd(), delete=False) as tf:
         for f in kwargs['file']:
             tf.write(f"file {quote(str(f))}\n")
@@ -220,9 +226,12 @@ def cli_info(**kwargs):
                 click.echo(f'{k}: {v}')
         stream_entries = ['codec_name', 'height', 'width']
         video_stream = [x for x in video_info['streams'] if x['codec_type'] == 'video']
-        for k, v in video_stream[0].items():
-            if k in stream_entries:
-                click.echo(f'{k}: {v}')
+        if video_stream:
+            for k, v in video_stream[0].items():
+                if k in stream_entries:
+                    click.echo(f'{k}: {v}')
+        else:
+            click.echo('No video stream found')
     
 @cli.command('repack', short_help='Change Video Container')
 @click.option('--format', '-f', type=click.Choice(['mkv', 'mp4']), default='mp4', help='Format of output')
@@ -260,14 +269,30 @@ def cli_gif_preview(**kwargs):
     ffmpeg = locate_binary('ffmpeg')
     input_file = str(kwargs['file'])
     output_file = str(kwargs['file'].with_suffix('.gif'))
+    start = kwargs['start']
+    stop = kwargs['stop']
+
+    if start < 0:
+        raise click.UsageError('--start must be non-negative')
+    if stop != -1 and stop < 0:
+        raise click.UsageError('--stop must be non-negative or -1')
+    if kwargs['step'] <= 0:
+        raise click.UsageError('--step must be greater than zero')
+    if kwargs['length'] <= 0:
+        raise click.UsageError('--length must be greater than zero')
+    if kwargs['fps'] <= 0:
+        raise click.UsageError('--fps must be greater than zero')
+    if kwargs['scale'] <= 0:
+        raise click.UsageError('--scale must be greater than zero')
+
     video_filter = f'fps={kwargs["fps"]},scale={kwargs["scale"]}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse'
-    if kwargs['stop'] == -1:
+    if stop == -1:
         try:
             video_info = probe_metadata(kwargs['file'])
         except SubprocessError as err:
             raise click.BadArgumentUsage('Unable to determine duration of video file. Please specify --stop manually') from err
-        kwargs['stop'] = round(float(video_info['format']['duration']))
-    if kwargs['start'] >= kwargs['stop']:
+        stop = round(float(video_info['format']['duration']))
+    if start >= stop:
         raise click.BadOptionUsage('start', '--start must be before --stop')
     if os.path.exists(output_file):
         if click.confirm(f'{output_file} exists. Overwrite?'):
@@ -276,18 +301,18 @@ def cli_gif_preview(**kwargs):
             raise click.Abort()
     with tempfile.TemporaryDirectory() as tmp:
         log.info(f'Generating gif previews in: {tmp}')
-        with open(tmp + '/files.txt', 'w') as tmp_file, click.progressbar(length=kwargs['stop'], label='Generating gifs', hidden=debug_mode) as bar:
-            while kwargs['start'] < kwargs['stop']:
-                gif_file = f'{tmp}/{kwargs["start"]}.gif'
+        with open(tmp + '/files.txt', 'w') as tmp_file, click.progressbar(length=stop, label='Generating gifs', hidden=debug_mode) as bar:
+            while start < stop:
+                gif_file = f'{tmp}/{start}.gif'
                 tmp_file.write(f'file {gif_file}\n')
-                cmd = [ffmpeg, '-i', input_file, '-ss', str(kwargs['start']), '-t', str(kwargs['length']), '-vf', video_filter, '-loop', '1', gif_file]
+                cmd = [ffmpeg, '-i', input_file, '-ss', str(start), '-t', str(kwargs['length']), '-vf', video_filter, '-loop', '1', gif_file]
                 try:
                     run_cmd(cmd)
                 except SubprocessError as exc:
                     raise click.ClickException('ffmpeg returned non-zero status building gifs') from exc
                 log.info(f'Wrote: {gif_file}')
-                kwargs['start'] += kwargs['step']
-                bar.update(kwargs['step'], current_item=kwargs['start'])
+                start += kwargs['step']
+                bar.update(kwargs['step'], current_item=start)
         log.info('Combining gif previews into single file')
         cmd = [ffmpeg, '-f', 'concat', '-safe', '0', '-i', tmp_file.name, '-ignore_loop', '1', output_file]
         try:
@@ -313,29 +338,36 @@ def cli_extract(**kwargs):
         video_info = probe_metadata(kwargs['file'], short=False)
     except SubprocessError as err:
         raise click.BadArgumentUsage('Unable to determine video duration') from err
-    else:
-        other_opts = '-vsync vfr -q:v 2'  # prevent frame duplication and set to high JPEG quality
-        if kwargs['every_frame']:
-            total_frames = int(video_info['streams'][0]['nb_frames'])
-            click.echo(f'Extracting every frame will create a {total_frames} files.')
-            if click.confirm('Do you wish to continue?', default=False):
-                video_filter = r'select=eq(pict_type\,I)'
-            else:
-                raise click.Abort()
-        else:
-            video_length = round(float(video_info['format']['duration']))
-            total_frames = video_length // kwargs['step']
-            video_filter = f'fps=1/{kwargs["step"]}'
+    other_opts = ['-vsync', 'vfr', '-q:v', '2']
+    if kwargs['every_frame']:
+        total_frames = int(video_info['streams'][0].get('nb_frames', 0))
+        click.echo(f'Extracting every frame will create a {total_frames} files.')
+        if click.confirm('Do you wish to continue?', default=False):
+            video_filter = ''
             if kwargs['timestamp']:
-                    video_filter += r",drawtext=fontsize=45:fontcolor=white:box=1:boxcolor=black:x=(W-tw)/2:y=(H-th-10):text='%{pts\:hms}'"
-        cmd = [ffmpeg, '-i', str(kwargs['file']), '-vf', video_filter, *other_opts.split(), f'{str(kwargs["output"])}/img%03d.jpg']
-        log.info('Creating output directory')
-        kwargs['output'].mkdir(exist_ok=True)
-        log.info('Extracting frames')
-        with click.progressbar(label=f'Extracting {total_frames} frames', length=total_frames, hidden=debug_mode) as bar:
-            try:
-                run_cmd(cmd)
-            except SubprocessError as exc:
-                raise click.ClickException('ffmpeg returned non-zero status') from exc
-            bar.update(n_steps=total_frames)
+                video_filter = r"drawtext=fontsize=45:fontcolor=white:box=1:boxcolor=black:x=(W-tw)/2:y=(H-th-10):text='%{pts\:hms}'"
+        else:
+            raise click.Abort()
+    else:
+        if kwargs['step'] <= 0:
+            raise click.UsageError('--step must be greater than zero')
+        video_length = round(float(video_info['format']['duration']))
+        total_frames = video_length // kwargs['step']
+        video_filter = f'fps=1/{kwargs["step"]}'
+        if kwargs['timestamp']:
+            video_filter += r",drawtext=fontsize=45:fontcolor=white:box=1:boxcolor=black:x=(W-tw)/2:y=(H-th-10):text='%{pts\:hms}'"
+    cmd = [ffmpeg, '-i', str(kwargs['file'])]
+    if video_filter:
+        cmd.extend(['-vf', video_filter])
+    cmd.extend(other_opts)
+    cmd.append(f'{str(kwargs["output"])}/img%03d.jpg')
+    log.info('Creating output directory')
+    kwargs['output'].mkdir(exist_ok=True)
+    log.info('Extracting frames')
+    with click.progressbar(label=f'Extracting {total_frames} frames', length=total_frames, hidden=debug_mode) as bar:
+        try:
+            run_cmd(cmd)
+        except SubprocessError as exc:
+            raise click.ClickException('ffmpeg returned non-zero status') from exc
+        bar.update(n_steps=total_frames)
     click.secho(f'Wrote screencaps to: {kwargs["output"]}/', fg='green')
