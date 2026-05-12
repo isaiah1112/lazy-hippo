@@ -1,11 +1,13 @@
 """ Utility for manipulating video files without re-encoding
 """
+import contextlib
 import json
 import logging
 import os
 import shutil
 import sys
 import tempfile
+from lib2to3.fixes.fix_input import context
 from pathlib import Path
 from shlex import quote
 from subprocess import CalledProcessError, CompletedProcess, SubprocessError, run
@@ -253,10 +255,8 @@ def cli_repack(**kwargs):
     try:
         run_cmd(cmd)
     except SubprocessError as exc:
-        try:
+        with contextlib.suppress(OSError):
             os.remove(new_file)  # ffmpeg doesn't clean up files when repackaging fails
-        except OSError:
-            pass
         raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
     click.secho(f'Repackaged: {kwargs["file"]} to: {new_file}', fg='green')
     
