@@ -187,7 +187,7 @@ def cli_join(**kwargs):
     ffmpeg = locate_binary('ffmpeg')
     if len(kwargs['file']) == 0:
         raise click.UsageError('At least one input file is required')
-    with tempfile.NamedTemporaryFile('w', dir=os.getcwd(), delete=False) as tf:
+    with tempfile.NamedTemporaryFile('w', suffix='.txt', delete=False) as tf:
         for f in kwargs['file']:
             tf.write(f"file {quote(str(f))}\n")
     new_file = str(kwargs['output'])
@@ -300,11 +300,12 @@ def cli_gif_preview(**kwargs):
         else:
             raise click.Abort()
     with tempfile.TemporaryDirectory() as tmp:
-        log.info(f'Generating gif previews in: {tmp}')
-        with open(tmp + '/files.txt', 'w') as tmp_file, click.progressbar(length=stop, label='Generating gifs', hidden=debug_mode) as bar:
+        tmp_dir = Path(tmp)
+        log.info(f'Generating gif previews in: {tmp_dir}')
+        with open(tmp_dir / 'files.txt', 'w') as tmp_file, click.progressbar(length=stop, label='Generating gifs', hidden=debug_mode) as bar:
             while start < stop:
-                gif_file = f'{tmp}/{start}.gif'
-                tmp_file.write(f'file {gif_file}\n')
+                gif_file = tmp_dir / f'{start}.gif'
+                tmp_file.write(f'file {quote(str(gif_file))}\n')
                 cmd = [ffmpeg, '-i', input_file, '-ss', str(start), '-t', str(kwargs['length']), '-vf', video_filter, '-loop', '1', gif_file]
                 try:
                     run_cmd(cmd)
