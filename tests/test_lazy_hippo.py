@@ -50,6 +50,41 @@ class TestTimeStamp(unittest.TestCase):
         with self.assertRaises(click.BadParameter):
             self.ts.convert('abc:def', None, Mock(fail=Mock(side_effect=click.BadParameter)))
 
+    def test_convert_negative_integer(self):
+        """Test that integer values less than -1 are rejected"""
+        with self.assertRaises(click.BadParameter):
+            self.ts.convert(-10, None, Mock(fail=Mock(side_effect=click.BadParameter)))
+
+    def test_convert_negative_one_allowed(self):
+        """Test that -1 is allowed (auto-detect sentinel value)"""
+        result = self.ts.convert(-1, None, None)
+        self.assertEqual(result, -1)
+
+    def test_convert_negative_component(self):
+        """Test that negative timestamp component raises an error"""
+        with self.assertRaises(click.BadParameter):
+            self.ts.convert('5:-30', None, Mock(fail=Mock(side_effect=click.BadParameter)))
+
+    def test_convert_invalid_type(self):
+        """Test that non-string, non-integer input raises an error"""
+        with self.assertRaises(click.BadParameter):
+            self.ts.convert(3.14, None, Mock(fail=Mock(side_effect=click.BadParameter)))
+
+    def test_convert_empty_string(self):
+        """Test that empty string raises an error"""
+        with self.assertRaises(click.BadParameter):
+            self.ts.convert('', None, Mock(fail=Mock(side_effect=click.BadParameter)))
+
+    def test_convert_zero(self):
+        """Test that zero is valid"""
+        result = self.ts.convert(0, None, None)
+        self.assertEqual(result, 0)
+
+    def test_convert_zero_string(self):
+        """Test that '0' string is valid"""
+        result = self.ts.convert('0', None, None)
+        self.assertEqual(result, 0)
+
 
 class TestLocateBinary(unittest.TestCase):
     """Test the locate_binary function"""
