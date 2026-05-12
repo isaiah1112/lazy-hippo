@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -63,22 +64,19 @@ class TimeStamp(click.ParamType):
 TIME_STAMP = TimeStamp()
 
 def locate_binary(command: str) -> str:
-    """ Attempt to locate a binary using the 'which' command
-    
+    """Attempt to locate a binary using the system PATH.
+
     :param command: The unix command to find by name
     :type command: str
-    :returns: Full UNIX path to binary (if found)
-    :returntype: str
+    :returns: Full path to binary (if found)
+    :rtype: str
     :raises: click.UsageError
     """
-    global log
-    try:
-        binary_path = run_cmd(f'which {command}')
-    except CalledProcessError as err:
-        raise click.UsageError(f'Unable to locate {command}. Is it installed?') from err
-    else:
-        log.info(binary_path.stdout.strip().decode())
-        return binary_path.stdout.strip().decode()
+    path = shutil.which(command)
+    if not path:
+        raise click.UsageError(f'Unable to locate {command}. Is it installed?')
+    log.info(path)
+    return path
     
 def probe_metadata(video_file: Path, short: bool = True) -> dict:
     """ Use `ffprobe` to extract video metadata
@@ -94,28 +92,28 @@ def probe_metadata(video_file: Path, short: bool = True) -> dict:
     global log
     ffprobe = locate_binary('ffprobe')
     if short:
-        cmd = f'{ffprobe} -v quiet -print_format json -show_format {quote(str(video_file))}'
+        cmd = [ffprobe, '-v', 'quiet', '-print_format', 'json', '-show_format', str(video_file)]
     else:
-        cmd = f'{ffprobe} -v quiet -print_format json -show_format -show_streams {quote(str(video_file))}'
+        cmd = [ffprobe, '-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', str(video_file)]
     video_metadata = run_cmd(cmd)
     return json.loads(video_metadata.stdout)
     
     
-def run_cmd(cmd: str) -> CompletedProcess:
-    """ Run cmd in a shell, capturing the output
-    
-    :param cmd: ffmpeg or ffprobe command to run in shell
-    :type cmd: str
+def run_cmd(cmd: list[str] | str) -> CompletedProcess:
+    """Run a command without a shell and capture its output.
+
+    :param cmd: ffmpeg or ffprobe command to run
+    :type cmd: list[str] | str
     :returns: CompletedProcess Object from `subprocess.run()`
     :rtype: CompletedProcess
     :raises: subprocess.CalledProcessError
     """
     global log
     log.info(cmd)
-    shell_cmd = run(cmd, shell=True, capture_output=True)
-    log.debug(shell_cmd)
-    shell_cmd.check_returncode()
-    return shell_cmd
+    process = run(cmd, shell=False, capture_output=True, text=True)
+    log.debug(process)
+    process.check_returncode()
+    return process
     
 
 @click.group()
@@ -158,7 +156,7 @@ def cli_split(**kwargs):
                 raise click.UsageError(f'Chunk {idx} end time {end_time} is before start time {start_time}')
             click.echo(f'Processing chunk {idx} from {start_time} to {end_time}...')
             new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-{str(idx)}{kwargs["file"].suffix}'))
-            cmd = f'{ffmpeg} -y -ss {start_time} -to {end_time} -i {quote(input_file)} -c copy {quote(new_file)}'
+            cmd = [ffmpeg, '-y', '-ss', str(start_time), '-to', str(end_time), '-i', input_file, '-c', 'copy', new_file]
             try:
                 run_cmd(cmd)
             except SubprocessError as exc:
@@ -166,7 +164,7 @@ def cli_split(**kwargs):
     elif kwargs['every'] > 0:
         click.secho(f'Splitting video every {kwargs["every"]} seconds...')
         new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-%03d{kwargs["file"].suffix}'))
-        cmd = f'{ffmpeg} -i {quote(input_file)} -c copy -map 0 -f segment -segment_time {kwargs["every"]} -reset_timestamps 1 -segment_format_options movflags=+faststart {quote(new_file)}'
+        cmd = [ffmpeg, '-i', input_file, '-c', 'copy', '-map', '0', '-f', 'segment', '-segment_time', str(kwargs['every']), '-reset_timestamps', '1', '-segment_format_options', 'movflags=+faststart', new_file]
         try:
             run_cmd(cmd)
         except SubprocessError as exc:
@@ -187,7 +185,7 @@ def cli_join(**kwargs):
         for f in kwargs['file']:
             tf.write(f"file {quote(str(f))}\n")
     new_file = str(kwargs['output'])
-    cmd = f'{ffmpeg} -y -f concat -i {tf.name} -c copy {quote(new_file)}'
+    cmd = [ffmpeg, '-y', '-f', 'concat', '-i', tf.name, '-c', 'copy', new_file]
     try:
         run_cmd(cmd)
     except SubprocessError as exc:
@@ -235,7 +233,7 @@ def cli_repack(**kwargs):
     ffmpeg = locate_binary('ffmpeg')
     input_file = str(kwargs['file'])
     new_file = str(kwargs['file'].with_suffix('.' + kwargs['format']))
-    cmd = f'{ffmpeg} -i {quote(input_file)} -c:v copy -c:a copy {quote(new_file)}'
+    cmd = [ffmpeg, '-i', input_file, '-c:v', 'copy', '-c:a', 'copy', new_file]
     try:
         run_cmd(cmd)
     except SubprocessError as exc:
@@ -282,7 +280,7 @@ def cli_gif_preview(**kwargs):
             while kwargs['start'] < kwargs['stop']:
                 gif_file = f'{tmp}/{kwargs["start"]}.gif'
                 tmp_file.write(f'file {gif_file}\n')
-                cmd = f'{ffmpeg} -i {quote(input_file)} -ss {kwargs["start"]} -t {kwargs["length"]} -vf {quote(video_filter)} -loop 1 {gif_file}'
+                cmd = [ffmpeg, '-i', input_file, '-ss', str(kwargs['start']), '-t', str(kwargs['length']), '-vf', video_filter, '-loop', '1', gif_file]
                 try:
                     run_cmd(cmd)
                 except SubprocessError as exc:
@@ -291,7 +289,7 @@ def cli_gif_preview(**kwargs):
                 kwargs['start'] += kwargs['step']
                 bar.update(kwargs['step'], current_item=kwargs['start'])
         log.info('Combining gif previews into single file')
-        cmd = f'{ffmpeg} -f concat -safe 0 -i {tmp_file.name} -ignore_loop 1 {quote(output_file)}'
+        cmd = [ffmpeg, '-f', 'concat', '-safe', '0', '-i', tmp_file.name, '-ignore_loop', '1', output_file]
         try:
             run_cmd(cmd)
         except SubprocessError as exc:
@@ -330,7 +328,7 @@ def cli_extract(**kwargs):
             video_filter = f'fps=1/{kwargs["step"]}'
             if kwargs['timestamp']:
                     video_filter += r",drawtext=fontsize=45:fontcolor=white:box=1:boxcolor=black:x=(W-tw)/2:y=(H-th-10):text='%{pts\:hms}'"
-        cmd = f'{ffmpeg} -i {quote(str(kwargs["file"]))} -vf {quote(video_filter)} {other_opts} {str(kwargs["output"])}/img%03d.jpg'
+        cmd = [ffmpeg, '-i', str(kwargs['file']), '-vf', video_filter, *other_opts.split(), f'{str(kwargs["output"])}/img%03d.jpg']
         log.info('Creating output directory')
         kwargs['output'].mkdir(exist_ok=True)
         log.info('Extracting frames')

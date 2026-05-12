@@ -89,21 +89,19 @@ class TestTimeStamp(unittest.TestCase):
 class TestLocateBinary(unittest.TestCase):
     """Test the locate_binary function"""
 
-    @patch('lazy_hippo.run_cmd')
-    def test_locate_binary_found(self, mock_run_cmd):
+    @patch('lazy_hippo.shutil.which')
+    def test_locate_binary_found(self, mock_which):
         """Test locating a binary that exists"""
-        mock_result = Mock()
-        mock_result.stdout = b'/usr/bin/ffmpeg\n'
-        mock_run_cmd.return_value = mock_result
+        mock_which.return_value = '/usr/bin/ffmpeg'
 
         result = lazy_hippo.locate_binary('ffmpeg')
         self.assertEqual(result, '/usr/bin/ffmpeg')
-        mock_run_cmd.assert_called_once_with('which ffmpeg')
+        mock_which.assert_called_once_with('ffmpeg')
 
-    @patch('lazy_hippo.run_cmd')
-    def test_locate_binary_not_found(self, mock_run_cmd):
+    @patch('lazy_hippo.shutil.which')
+    def test_locate_binary_not_found(self, mock_which):
         """Test that UsageError is raised when binary is not found"""
-        mock_run_cmd.side_effect = CalledProcessError(returncode=1, cmd='which nonexistent')
+        mock_which.return_value = None
 
         with self.assertRaises(click.UsageError):
             lazy_hippo.locate_binary('nonexistent')
@@ -127,8 +125,10 @@ class TestProbeMetadata(unittest.TestCase):
 
         self.assertIn('format', result)
         self.assertEqual(result['format']['duration'], '100.5')
-        self.assertIn('-print_format json', mock_run_cmd.call_args[0][0])
-        self.assertNotIn('-show_streams', mock_run_cmd.call_args[0][0])
+        cmd_args = mock_run_cmd.call_args[0][0]
+        self.assertEqual(cmd_args[0], '/usr/bin/ffprobe')
+        self.assertIn('-print_format', cmd_args)
+        self.assertNotIn('-show_streams', cmd_args)
 
     @patch('lazy_hippo.locate_binary')
     @patch('lazy_hippo.run_cmd')
@@ -145,7 +145,8 @@ class TestProbeMetadata(unittest.TestCase):
         result = lazy_hippo.probe_metadata(Path('test.mp4'), short=False)
 
         self.assertIn('streams', result)
-        self.assertIn('-show_streams', mock_run_cmd.call_args[0][0])
+        cmd_args = mock_run_cmd.call_args[0][0]
+        self.assertIn('-show_streams', cmd_args)
 
 
 class TestRunCmd(unittest.TestCase):
@@ -156,14 +157,14 @@ class TestRunCmd(unittest.TestCase):
         """Test running a command successfully"""
         mock_result = Mock()
         mock_result.returncode = 0
-        mock_result.stdout = b'output'
+        mock_result.stdout = 'output'
         mock_result.check_returncode = Mock()
         mock_run.return_value = mock_result
 
         result = lazy_hippo.run_cmd('echo test')
 
         self.assertEqual(result, mock_result)
-        mock_run.assert_called_once_with('echo test', shell=True, capture_output=True)
+        mock_run.assert_called_once_with('echo test', shell=False, capture_output=True, text=True)
         mock_result.check_returncode.assert_called_once()
 
     @patch('lazy_hippo.run')
