@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 from shlex import quote
-from subprocess import CalledProcessError, CompletedProcess, SubprocessError, run
+from subprocess import CalledProcessError, CompletedProcess, run
 
 import click
 
@@ -171,7 +171,7 @@ def cli_split(**kwargs):
             cmd = [ffmpeg, '-y', '-ss', str(start_time), '-to', str(end_time), '-i', input_file, '-c', 'copy', new_file]
             try:
                 run_cmd(cmd)
-            except SubprocessError as exc:
+            except CalledProcessError as exc:
                 raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
     elif kwargs['every'] > 0:
         click.secho(f'Splitting video every {kwargs["every"]} seconds...')
@@ -179,7 +179,7 @@ def cli_split(**kwargs):
         cmd = [ffmpeg, '-i', input_file, '-c', 'copy', '-map', '0', '-f', 'segment', '-segment_time', str(kwargs['every']), '-reset_timestamps', '1', '-segment_format_options', 'movflags=+faststart', new_file]
         try:
             run_cmd(cmd)
-        except SubprocessError as exc:
+        except CalledProcessError as exc:
             raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
         else:
             click.secho(f'Split of file {input_file} completed...', fg='green')
@@ -202,7 +202,7 @@ def cli_join(**kwargs):
     cmd = [ffmpeg, '-y', '-f', 'concat', '-i', tf.name, '-c', 'copy', new_file]
     try:
         run_cmd(cmd)
-    except SubprocessError as exc:
+    except CalledProcessError as exc:
         raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
     else:
         click.secho(f'Joined {len(kwargs["file"])} files into {kwargs["output"]}', fg='green')
@@ -217,7 +217,7 @@ def cli_info(**kwargs):
     """
     try:
         video_info = probe_metadata(kwargs['file'], short=False)
-    except SubprocessError as exc:
+    except CalledProcessError as exc:
         raise click.ClickException(f'ffprobe returned non-zero status: {format_command_error(exc)}') from exc
     if kwargs['format'] == 'json':
         click.echo(json.dumps(video_info, indent=2))
@@ -253,7 +253,7 @@ def cli_repack(**kwargs):
     cmd = [ffmpeg, '-i', input_file, '-c:v', 'copy', '-c:a', 'copy', new_file]
     try:
         run_cmd(cmd)
-    except SubprocessError as exc:
+    except CalledProcessError as exc:
         with contextlib.suppress(OSError):
             os.remove(new_file)  # ffmpeg doesn't clean up files when repackaging fails
         raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
@@ -295,7 +295,7 @@ def cli_gif_preview(**kwargs):
     if stop == -1:
         try:
             video_info = probe_metadata(kwargs['file'])
-        except SubprocessError as err:
+        except CalledProcessError as err:
             raise click.BadArgumentUsage('Unable to determine duration of video file. Please specify --stop manually') from err
         stop = round(float(video_info['format']['duration']))
     if start >= stop:
@@ -312,19 +312,19 @@ def cli_gif_preview(**kwargs):
             while start < stop:
                 gif_file = tmp_dir / f'{start}.gif'
                 tmp_file.write(f'file {quote(str(gif_file))}\n')
-                cmd = [ffmpeg, '-i', input_file, '-ss', str(start), '-t', str(kwargs['length']), '-vf', video_filter, '-loop', '1', gif_file]
+                cmd = [ffmpeg, '-i', str(input_file), '-ss', str(start), '-t', str(kwargs['length']), '-vf', video_filter, '-loop', '1', str(gif_file)]
                 try:
                     run_cmd(cmd)
-                except SubprocessError as exc:
+                except CalledProcessError as exc:
                     raise click.ClickException(f'ffmpeg returned non-zero status building gifs: {format_command_error(exc)}') from exc
                 log.info(f'Wrote: {gif_file}')
                 start += kwargs['step']
                 bar.update(kwargs['step'], current_item=start)
         log.info('Combining gif previews into single file')
-        cmd = [ffmpeg, '-f', 'concat', '-safe', '0', '-i', tmp_file.name, '-ignore_loop', '1', output_file]
+        cmd = [ffmpeg, '-f', 'concat', '-safe', '0', '-i', tmp_file.name, '-ignore_loop', '1', str(output_file)]
         try:
             run_cmd(cmd)
-        except SubprocessError as exc:
+        except CalledProcessError as exc:
             raise click.ClickException(f'ffmpeg returned non-zero status combining gifs: {format_command_error(exc)}') from exc
         click.secho(f'Created preview GIF: {output_file}', fg='green')
 
@@ -343,7 +343,7 @@ def cli_extract(**kwargs):
     ffmpeg = locate_binary('ffmpeg')
     try:
         video_info = probe_metadata(kwargs['file'], short=False)
-    except SubprocessError as err:
+    except CalledProcessError as err:
         raise click.BadArgumentUsage('Unable to determine video duration') from err
     other_opts = ['-vsync', 'vfr', '-q:v', '2']
     if kwargs['every_frame']:
@@ -374,7 +374,7 @@ def cli_extract(**kwargs):
     with click.progressbar(label=f'Extracting {total_frames} frames', length=total_frames, hidden=debug_mode) as bar:
         try:
             run_cmd(cmd)
-        except SubprocessError as exc:
+        except CalledProcessError as exc:
             raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
         bar.update(n_steps=total_frames)
     click.secho(f'Wrote screencaps to: {kwargs["output"]}/', fg='green')
