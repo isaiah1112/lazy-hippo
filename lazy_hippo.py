@@ -7,7 +7,6 @@ import os
 import shutil
 import sys
 import tempfile
-from lib2to3.fixes.fix_input import context
 from pathlib import Path
 from shlex import quote
 from subprocess import CalledProcessError, CompletedProcess, SubprocessError, run
