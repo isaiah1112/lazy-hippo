@@ -139,11 +139,9 @@ def cli(ctx, **kwargs):
     verbose_count = kwargs['verbose']
     ctx.obj['debug'] = debug_mode
     if debug_mode:
-        log.setLevel(logging.DEBUG)
-    elif verbose_count > 0:
         log.setLevel(logging.INFO)
-    else:
-        log.setLevel(logging.CRITICAL)
+    elif debug_mode and verbose_count > 0:
+        log.setLevel(logging.DEBUG)
 
 
 @cli.command('split', short_help='Split a video file')
