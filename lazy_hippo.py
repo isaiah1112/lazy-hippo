@@ -94,7 +94,6 @@ def probe_metadata(video_file: Path, short: bool = True) -> dict:
     :rtype: dict
     :raises: subprocess.CalledProcessError
     """
-    global log
     ffprobe = locate_binary('ffprobe')
     if short:
         cmd = [ffprobe, '-v', 'quiet', '-print_format', 'json', '-show_format', str(video_file)]
@@ -113,7 +112,6 @@ def run_cmd(cmd: list[str] | str) -> CompletedProcess:
     :rtype: CompletedProcess
     :raises: subprocess.CalledProcessError
     """
-    global log
     log.info(cmd)
     process = run(cmd, shell=False, capture_output=True, text=True)
     log.debug(process)
