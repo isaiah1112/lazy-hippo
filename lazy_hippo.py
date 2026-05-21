@@ -211,7 +211,7 @@ def cli_join(**kwargs):
 
 @cli.command('info', short_help='Get Video Metadata')
 @click.option('--format', '-f', type=click.Choice(['txt', 'json']), default='txt', help='Format of output')
-@click.argument('file', nargs=1, type=click.Path(exists=True, dir_okay=False))
+@click.argument('file', nargs=1, type=click.Path(exists=True, dir_okay=False, path_type=Path))
 def cli_info(**kwargs):
     """ Get video stream and format metadata from a file using 'ffprobe'
     """
