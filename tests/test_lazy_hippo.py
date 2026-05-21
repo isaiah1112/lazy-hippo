@@ -5,12 +5,14 @@ import tempfile
 import unittest
 from pathlib import Path
 from subprocess import CalledProcessError
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import click
 from click.testing import CliRunner
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import contextlib
+
 import lazy_hippo
 
 
@@ -179,6 +181,18 @@ class TestRunCmd(unittest.TestCase):
             lazy_hippo.run_cmd('false')
 
 
+class TestFormatCommandError(unittest.TestCase):
+    """Test formatting of subprocess command errors"""
+
+    def test_format_command_error_with_stderr(self):
+        exc = CalledProcessError(1, 'cmd', stderr='something went wrong\n')
+        self.assertEqual(lazy_hippo.format_command_error(exc), 'something went wrong')
+
+    def test_format_command_error_without_stderr(self):
+        exc = CalledProcessError(2, 'cmd', stderr='')
+        self.assertEqual(lazy_hippo.format_command_error(exc), 'Command failed with exit code 2')
+
+
 class TestCliSplit(unittest.TestCase):
     """Test the cli_split command"""
 
@@ -189,10 +203,8 @@ class TestCliSplit(unittest.TestCase):
         self.temp_path = Path(self.temp_file.name)
 
     def tearDown(self):
-        try:
+        with contextlib.suppress(OSError):
             os.remove(self.temp_path)
-        except OSError:
-            pass
 
     @patch('lazy_hippo.locate_binary')
     @patch('lazy_hippo.run_cmd')
@@ -270,14 +282,10 @@ class TestCliJoin(unittest.TestCase):
 
     def tearDown(self):
         for f in self.temp_files:
-            try:
+            with contextlib.suppress(OSError):
                 os.remove(f)
-            except OSError:
-                pass
-        try:
+        with contextlib.suppress(OSError):
             os.remove(self.output_file)
-        except OSError:
-            pass
 
     @patch('lazy_hippo.locate_binary')
     @patch('lazy_hippo.run_cmd')
@@ -304,10 +312,8 @@ class TestCliInfo(unittest.TestCase):
         self.temp_file.close()
 
     def tearDown(self):
-        try:
+        with contextlib.suppress(OSError):
             os.remove(self.temp_file.name)
-        except OSError:
-            pass
 
     @patch('lazy_hippo.probe_metadata')
     def test_info_txt_output(self, mock_probe):
@@ -354,6 +360,26 @@ class TestCliInfo(unittest.TestCase):
         output_json = json.loads(result.output)
         self.assertIn('format', output_json)
 
+    @patch('lazy_hippo.probe_metadata')
+    def test_info_txt_output_no_video_stream(self, mock_probe):
+        """Test info command when no video stream exists"""
+        mock_probe.return_value = {
+            'format': {
+                'filename': 'test.mp4',
+                'duration': '100.5',
+                'size': '1024000',
+                'bit_rate': '1000000'
+            },
+            'streams': []
+        }
+
+        result = self.runner.invoke(lazy_hippo.cli_info, [
+            self.temp_file.name
+        ])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn('No video stream found', result.output)
+
 
 class TestCliRepack(unittest.TestCase):
     """Test the cli_repack command"""
@@ -366,10 +392,8 @@ class TestCliRepack(unittest.TestCase):
 
     def tearDown(self):
         for ext in ['.mp4', '.mkv']:
-            try:
+            with contextlib.suppress(OSError):
                 os.remove(self.temp_path.with_suffix(ext))
-            except OSError:
-                pass
 
     @patch('lazy_hippo.locate_binary')
     @patch('lazy_hippo.run_cmd')
@@ -403,14 +427,17 @@ class TestCliGifPreview(unittest.TestCase):
         except OSError:
             pass
 
+    @patch('lazy_hippo.click.progressbar')
     @patch('lazy_hippo.locate_binary')
     @patch('lazy_hippo.probe_metadata')
     @patch('lazy_hippo.run_cmd')
-    def test_gif_preview_with_auto_duration(self, mock_run_cmd, mock_probe, mock_locate):
+    def test_gif_preview_with_auto_duration(self, mock_run_cmd, mock_probe, mock_locate, mock_progressbar):
         """Test GIF preview with automatic duration detection"""
         mock_locate.return_value = '/usr/bin/ffmpeg'
         mock_probe.return_value = {'format': {'duration': '120.5'}}
         mock_run_cmd.return_value = Mock(returncode=0)
+        mock_progressbar.return_value.__enter__.return_value = Mock()
+        mock_progressbar.return_value.__exit__.return_value = False
 
         result = self.runner.invoke(lazy_hippo.cli_gif_preview, [
             str(self.temp_path)
@@ -418,6 +445,8 @@ class TestCliGifPreview(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         self.assertGreaterEqual(mock_run_cmd.call_count, 2)
+        mock_progressbar.assert_called_once()
+        self.assertEqual(mock_progressbar.call_args.kwargs['length'], 2)
 
 
 class TestCliExtract(unittest.TestCase):
@@ -430,10 +459,8 @@ class TestCliExtract(unittest.TestCase):
         self.output_dir = tempfile.mkdtemp()
 
     def tearDown(self):
-        try:
+        with contextlib.suppress(OSError):
             os.remove(self.temp_file.name)
-        except OSError:
-            pass
         import shutil
         shutil.rmtree(self.output_dir, ignore_errors=True)
 
@@ -453,6 +480,24 @@ class TestCliExtract(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         mock_run_cmd.assert_called()
+
+    @patch('lazy_hippo.locate_binary')
+    @patch('lazy_hippo.probe_metadata')
+    @patch('lazy_hippo.run_cmd')
+    def test_extract_nested_output_path(self, mock_run_cmd, mock_probe, mock_locate):
+        """Test that nested output directories are created"""
+        mock_locate.return_value = '/usr/bin/ffmpeg'
+        mock_probe.return_value = {'format': {'duration': '120.5'}}
+        mock_run_cmd.return_value = Mock(returncode=0)
+
+        nested_output = Path(self.output_dir) / 'nested' / 'frames'
+        result = self.runner.invoke(lazy_hippo.cli_extract, [
+            '-o', str(nested_output),
+            self.temp_file.name
+        ])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertTrue(nested_output.exists())
 
 
 if __name__ == '__main__':
