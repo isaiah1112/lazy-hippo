@@ -64,7 +64,7 @@ Subcommands:
 - join — concatenate multiple files
 - repack — change container (no re-encoding)
 - gif-preview — generate a preview GIF
-- extract — save periodic frames
+- extract — save periodic frames (default output directory is `extracted_frames/`)
 
 ### Info
 Get basic human-readable metadata (use `-f json` for full JSON output):
@@ -133,10 +133,14 @@ lazy-hippo gif-preview input.mp4
 Options include `--start`, `--stop`, `--length`, `--fps`, `--scale`, and `--step`. Use `--help` for details.
 
 ### Extract
-Extract frames at specified intervals into a `screencaps/` directory (by default):
+Extract frames at specified intervals into an `extracted_frames/` directory by default. You can also specify a custom output directory with `-o`, including nested paths:
 
 ```bash
 lazy-hippo extract input.mp4
+```
+
+```bash
+lazy-hippo extract -o outputs/frames input.mp4
 ```
 
 ## Contributing
