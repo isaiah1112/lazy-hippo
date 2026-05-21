@@ -298,6 +298,7 @@ def cli_gif_preview(**kwargs):
         stop = round(float(video_info['format']['duration']))
     if start >= stop:
         raise click.BadOptionUsage('start', '--start must be before --stop')
+    gif_count = (stop - start + kwargs['step'] - 1) // kwargs['step']
     if os.path.exists(output_file):
         if click.confirm(f'{output_file} exists. Overwrite?'):
             os.remove(output_file)
@@ -306,7 +307,7 @@ def cli_gif_preview(**kwargs):
     with tempfile.TemporaryDirectory() as tmp:
         tmp_dir = Path(tmp)
         log.info(f'Generating gif previews in: {tmp_dir}')
-        with open(tmp_dir / 'files.txt', 'w') as tmp_file, click.progressbar(length=stop, label='Generating gifs', hidden=debug_mode) as bar:
+        with open(tmp_dir / 'files.txt', 'w') as tmp_file, click.progressbar(length=gif_count, label='Generating gifs', hidden=debug_mode) as bar:
             while start < stop:
                 gif_file = tmp_dir / f'{start}.gif'
                 tmp_file.write(f'file {quote(str(gif_file))}\n')
@@ -317,7 +318,7 @@ def cli_gif_preview(**kwargs):
                     raise click.ClickException(f'ffmpeg returned non-zero status building gifs: {format_command_error(exc)}') from exc
                 log.info(f'Wrote: {gif_file}')
                 start += kwargs['step']
-                bar.update(kwargs['step'], current_item=start)
+                bar.update(1)
         log.info('Combining gif previews into single file')
         cmd = [ffmpeg, '-f', 'concat', '-safe', '0', '-i', tmp_file.name, '-ignore_loop', '1', str(output_file)]
         try:
