@@ -369,7 +369,7 @@ def cli_extract(**kwargs):
     cmd.extend(other_opts)
     cmd.append(f'{str(kwargs["output"])}/img%03d.jpg')
     log.info('Creating output directory')
-    kwargs['output'].mkdir(exist_ok=True)
+    kwargs['output'].mkdir(parents=True, exist_ok=True)
     log.info('Extracting frames')
     with click.progressbar(label=f'Extracting {total_frames} frames', length=total_frames, hidden=debug_mode) as bar:
         try:
