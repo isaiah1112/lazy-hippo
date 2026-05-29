@@ -342,14 +342,14 @@ def cli_extract(**kwargs):
         video_info = probe_metadata(kwargs['file'], short=False)
     except CalledProcessError as err:
         raise click.BadArgumentUsage('Unable to determine video duration') from err
-    other_opts = ['-vsync', 'vfr', '-q:v', '2']
+    other_opts = ['-q:v', '2']
     if kwargs['every_frame']:
         total_frames = int(video_info['streams'][0].get('nb_frames', 0))
         click.echo(f'Extracting every frame will create a {total_frames} files.')
         if click.confirm('Do you wish to continue?', default=False):
-            video_filter = ''
+            video_filter = 'format=yuvj420p'
             if kwargs['timestamp']:
-                video_filter = r"drawtext=fontsize=45:fontcolor=white:box=1:boxcolor=black:x=(W-tw)/2:y=(H-th-10):text='%{pts\:hms}'"
+                video_filter = r"format=yuvj420p,drawtext=fontsize=45:fontcolor=white:box=1:boxcolor=black:x=(W-tw)/2:y=(H-th-10):text='%{pts\:hms}'"
         else:
             raise click.Abort()
     else:
@@ -357,7 +357,7 @@ def cli_extract(**kwargs):
             raise click.UsageError('--step must be greater than zero')
         video_length = round(float(video_info['format']['duration']))
         total_frames = video_length // kwargs['step']
-        video_filter = f'fps=1/{kwargs["step"]}'
+        video_filter = f'fps=1/{kwargs["step"]},format=yuvj420p'
         if kwargs['timestamp']:
             video_filter += r",drawtext=fontsize=45:fontcolor=white:box=1:boxcolor=black:x=(W-tw)/2:y=(H-th-10):text='%{pts\:hms}'"
     cmd = [ffmpeg, '-i', str(kwargs['file'])]
