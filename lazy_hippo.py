@@ -12,6 +12,7 @@ from shlex import quote
 from subprocess import CalledProcessError, CompletedProcess, run
 
 import click
+from PIL import Image, ImageDraw, ImageFont
 
 log = logging.getLogger(__name__)
 log_handler = logging.StreamHandler()
@@ -124,6 +125,57 @@ def format_command_error(exc: CalledProcessError) -> str:
     if stderr and log.level <= logging.INFO:
         return stderr.strip()
     return f'Command failed with exit code {exc.returncode}'
+
+
+def format_hms(seconds: float) -> str:
+    total_seconds = max(0, int(round(seconds)))
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    secs = total_seconds % 60
+    if hours:
+        return f'{hours}:{minutes:02d}:{secs:02d}'
+    return f'{minutes}:{secs:02d}'
+
+
+def draw_timestamp_on_image(image_path: Path, timestamp: str) -> None:
+    with Image.open(image_path) as image:
+        image = image.convert('RGB')
+        draw = ImageDraw.Draw(image)
+        font_size = max(24, image.height // 20)
+        try:
+            font = ImageFont.truetype('DejaVuSans-Bold.ttf', font_size)
+        except OSError:
+            try:
+                font = ImageFont.truetype('Arial.ttf', font_size)
+            except OSError:
+                font = ImageFont.load_default()
+        bbox = draw.textbbox((0, 0), timestamp, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        x = (image.width - text_width) // 2
+        padding = max(8, font_size // 4)
+        bottom_offset = 10
+        y = image.height - text_height - padding - bottom_offset
+        draw.rectangle(
+            [x - padding, y - padding, x + text_width + padding, y + text_height + padding],
+            fill=(0, 0, 0),
+        )
+        draw.text((x, y), timestamp, fill='white', font=font)
+        image.save(image_path, quality=95)
+
+
+def get_frame_rate(stream: dict) -> float:
+    rate = stream.get('avg_frame_rate') or stream.get('r_frame_rate') or '0/1'
+    if isinstance(rate, str) and '/' in rate:
+        try:
+            num, denom = rate.split('/')
+            return float(num) / float(denom) if float(denom) != 0 else 0.0
+        except (ValueError, ZeroDivisionError):
+            return 0.0
+    try:
+        return float(rate)
+    except (ValueError, TypeError):
+        return 0.0
 
 
 @click.group()
@@ -346,20 +398,16 @@ def cli_extract(**kwargs):
     if kwargs['every_frame']:
         total_frames = int(video_info['streams'][0].get('nb_frames', 0))
         click.echo(f'Extracting every frame will create a {total_frames} files.')
-        if click.confirm('Do you wish to continue?', default=False):
-            video_filter = 'format=yuvj420p'
-            if kwargs['timestamp']:
-                video_filter = r"format=yuvj420p,drawtext=fontsize=45:fontcolor=white:box=1:boxcolor=black:x=(W-tw)/2:y=(H-th-10):text='%{pts\:hms}'"
-        else:
+        if not click.confirm('Do you wish to continue?', default=False):
             raise click.Abort()
+        video_filter = ''
     else:
         if kwargs['step'] <= 0:
             raise click.UsageError('--step must be greater than zero')
         video_length = round(float(video_info['format']['duration']))
         total_frames = video_length // kwargs['step']
-        video_filter = f'fps=1/{kwargs["step"]},format=yuvj420p'
-        if kwargs['timestamp']:
-            video_filter += r",drawtext=fontsize=45:fontcolor=white:box=1:boxcolor=black:x=(W-tw)/2:y=(H-th-10):text='%{pts\:hms}'"
+        video_filter = f'fps=1/{kwargs["step"]}'
+
     cmd = [ffmpeg, '-i', str(kwargs['file'])]
     if video_filter:
         cmd.extend(['-vf', video_filter])
@@ -374,4 +422,15 @@ def cli_extract(**kwargs):
         except CalledProcessError as exc:
             raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
         bar.update(n_steps=total_frames)
+
+    if kwargs['timestamp']:
+        frame_files = sorted(kwargs['output'].glob('img*.jpg'))
+        frame_rate = get_frame_rate(video_info['streams'][0]) if kwargs['every_frame'] else 0.0
+        for idx, frame_file in enumerate(frame_files):
+            if kwargs['every_frame']:
+                timestamp = format_hms(idx / frame_rate if frame_rate > 0 else idx)
+            else:
+                timestamp = format_hms(idx * kwargs['step'])
+            draw_timestamp_on_image(frame_file, timestamp)
+
     click.secho(f'Wrote screencaps to: {kwargs["output"]}/', fg='green')
