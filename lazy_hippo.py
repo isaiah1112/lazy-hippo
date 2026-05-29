@@ -121,7 +121,7 @@ def run_cmd(cmd: list[str] | str) -> CompletedProcess:
 
 def format_command_error(exc: CalledProcessError) -> str:
     stderr = getattr(exc, 'stderr', '')
-    if stderr:
+    if stderr and log.level <= logging.INFO:
         return stderr.strip()
     return f'Command failed with exit code {exc.returncode}'
 
