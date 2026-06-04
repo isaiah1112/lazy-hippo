@@ -12,7 +12,6 @@ from shlex import quote
 from subprocess import CalledProcessError, CompletedProcess, run
 
 import click
-from PIL import Image, ImageDraw, ImageFont
 
 log = logging.getLogger(__name__)
 log_handler = logging.StreamHandler()
@@ -138,6 +137,7 @@ def format_hms(seconds: float) -> str:
 
 
 def draw_timestamp_on_image(image_path: Path, timestamp: str) -> None:
+    from PIL import Image, ImageDraw, ImageFont
     with Image.open(image_path) as image:
         image = image.convert('RGB')
         draw = ImageDraw.Draw(image)
