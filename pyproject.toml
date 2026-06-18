@@ -9,6 +9,7 @@ license = "MIT"
 dependencies = [
     "click>=8.3.3",
     "colorama>=0.4.6",
+    "pillow>=12.2.0",
 ]
 
 [project.scripts]

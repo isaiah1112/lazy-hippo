@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import sys
 import tempfile
@@ -186,11 +187,40 @@ class TestFormatCommandError(unittest.TestCase):
 
     def test_format_command_error_with_stderr(self):
         exc = CalledProcessError(1, 'cmd', stderr='something went wrong\n')
-        self.assertEqual(lazy_hippo.format_command_error(exc), 'something went wrong')
+        lazy_hippo.log.setLevel(logging.INFO)
+        try:
+            self.assertEqual(lazy_hippo.format_command_error(exc), 'something went wrong')
+        finally:
+            lazy_hippo.log.setLevel(logging.CRITICAL)
 
     def test_format_command_error_without_stderr(self):
         exc = CalledProcessError(2, 'cmd', stderr='')
         self.assertEqual(lazy_hippo.format_command_error(exc), 'Command failed with exit code 2')
+
+
+class TestTimestampOverlayHelpers(unittest.TestCase):
+    """Test the Pillow timestamp overlay helper functions"""
+
+    def test_format_hms_formats_minutes_and_seconds(self):
+        self.assertEqual(lazy_hippo.format_hms(90), '1:30')
+        self.assertEqual(lazy_hippo.format_hms(3605), '1:00:05')
+
+    def test_draw_timestamp_on_image_writes_image(self):
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            img_path = Path(tmpdir) / 'frame.jpg'
+            Image.new('RGB', (100, 100), color='blue').save(img_path)
+            original_bytes = img_path.read_bytes()
+
+            lazy_hippo.draw_timestamp_on_image(img_path, '0:01')
+
+            self.assertTrue(img_path.exists())
+            self.assertNotEqual(img_path.read_bytes(), original_bytes)
+
+    def test_get_frame_rate_parses_fractional_rate(self):
+        stream = {'avg_frame_rate': '30000/1001'}
+        self.assertAlmostEqual(lazy_hippo.get_frame_rate(stream), 29.97, places=2)
 
 
 class TestCliSplit(unittest.TestCase):
@@ -498,6 +528,35 @@ class TestCliExtract(unittest.TestCase):
 
         self.assertEqual(result.exit_code, 0)
         self.assertTrue(nested_output.exists())
+
+    @patch('lazy_hippo.locate_binary')
+    @patch('lazy_hippo.probe_metadata')
+    @patch('lazy_hippo.draw_timestamp_on_image')
+    @patch('lazy_hippo.run_cmd')
+    def test_extract_timestamp_overlay(self, mock_run_cmd, mock_draw, mock_probe, mock_locate):
+        """Test that timestamp overlay is applied to each extracted frame"""
+        from PIL import Image
+
+        mock_locate.return_value = '/usr/bin/ffmpeg'
+        mock_probe.return_value = {'format': {'duration': '120.5'}}
+
+        def fake_run(cmd):
+            out_pattern = Path(cmd[-1])
+            out_dir = out_pattern.parent
+            out_dir.mkdir(parents=True, exist_ok=True)
+            for i in range(1, 3):
+                Image.new('RGB', (10, 10), color='red').save(out_dir / f'img{i:03d}.jpg')
+            return Mock(returncode=0)
+
+        mock_run_cmd.side_effect = fake_run
+
+        result = self.runner.invoke(lazy_hippo.cli_extract, [
+            '-o', self.output_dir,
+            self.temp_file.name
+        ])
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(mock_draw.call_count, 2)
 
 
 if __name__ == '__main__':
