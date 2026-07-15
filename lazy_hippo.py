@@ -3,13 +3,16 @@
 import contextlib
 import json
 import logging
-from pathlib import Path
 import shutil
 import sys
 import tempfile
+from collections.abc import Sequence
+from pathlib import Path
 from shlex import quote
 from subprocess import CalledProcessError, CompletedProcess, run
-from typing import Any, Sequence, TypedDict, Optional
+from typing import Any, Optional, TypedDict
+
+import click
 
 
 class StreamInfo(TypedDict, total=False):
@@ -32,8 +35,6 @@ class FormatInfo(TypedDict, total=False):
 class ProbeMetadata(TypedDict):
     format: FormatInfo
     streams: list[StreamInfo]
-
-import click
 
 log = logging.getLogger(__name__)
 log_handler = logging.StreamHandler()
@@ -301,16 +302,14 @@ def cli_info(**kwargs):
     try:
         video_info = probe_metadata(kwargs['file'], short=False)
     except CalledProcessError as exc:
-        try:
+        with contextlib.suppress(Exception):
             exc.add_note('ffprobe failed when obtaining video metadata')
-        except Exception:
-            pass
         raise click.ClickException(f'ffprobe returned non-zero status: {format_command_error(exc)}') from exc
     if kwargs['format'] == 'json':
         click.echo(json.dumps(video_info, indent=2))
         return
 
-    def format_field(key: str, val: Optional[str]) -> str:
+    def format_field(key: str, val: str | None) -> str:
         if val is None:
             return 'N/A'
         match key:
@@ -352,14 +351,10 @@ def cli_repack(**kwargs):
         run_cmd(cmd)
     except CalledProcessError as exc:
         # Ensure partial output is removed if ffmpeg failed
-        try:
+        with contextlib.suppress(Exception):
             Path(new_file).unlink(missing_ok=True)
-        except Exception:
-            pass
-        try:
+        with contextlib.suppress(Exception):
             exc.add_note('ffmpeg failed during repackaging')
-        except Exception:
-            pass
         raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
     click.secho(f'Repackaged: {kwargs["file"]} to: {new_file}', fg='green')
     
@@ -421,10 +416,8 @@ def cli_gif_preview(**kwargs):
                 try:
                     run_cmd(cmd)
                 except CalledProcessError as exc:
-                    try:
+                    with contextlib.suppress(Exception):
                         exc.add_note('ffmpeg failed while generating GIF segments')
-                    except Exception:
-                        pass
                     raise click.ClickException(f'ffmpeg returned non-zero status building gifs: {format_command_error(exc)}') from exc
                 log.info(f'Wrote: {gif_file}')
                 start += kwargs['step']
@@ -434,10 +427,8 @@ def cli_gif_preview(**kwargs):
         try:
             run_cmd(cmd)
         except CalledProcessError as exc:
-            try:
+            with contextlib.suppress(Exception):
                 exc.add_note('ffmpeg failed while concatenating GIF previews')
-            except Exception:
-                pass
             raise click.ClickException(f'ffmpeg returned non-zero status combining gifs: {format_command_error(exc)}') from exc
         click.secho(f'Created preview GIF: {output_file}', fg='green')
 
@@ -484,10 +475,8 @@ def cli_extract(**kwargs):
         try:
             run_cmd(cmd)
         except CalledProcessError as exc:
-                try:
+                with contextlib.suppress(Exception):
                     exc.add_note('ffmpeg failed while extracting frames')
-                except Exception:
-                    pass
                 raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
         bar.update(n_steps=total_frames)
 
