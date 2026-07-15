@@ -308,25 +308,35 @@ def cli_info(**kwargs):
         raise click.ClickException(f'ffprobe returned non-zero status: {format_command_error(exc)}') from exc
     if kwargs['format'] == 'json':
         click.echo(json.dumps(video_info, indent=2))
-    else:
-        format_entries = ['filename', 'duration', 'size', 'bit_rate']
-        for k, v in video_info['format'].items():
-            if k in format_entries:
-                if k == 'size':  # Convert to MB
-                    v = str(round(int(v) / (1024 * 1024))) + "MB"
-                elif k == 'duration':  # Display as seconds
-                    v = str(round(float(v))) + "s"
-                elif k == 'bit_rate':  # Convert to kb/s
-                    v = str(round(int(v) / 1000)) + 'kb/s'
-                click.echo(f'{k}: {v}')
-        stream_entries = ['codec_name', 'height', 'width']
-        video_stream = [x for x in video_info['streams'] if x['codec_type'] == 'video']
-        if video_stream:
-            for k, v in video_stream[0].items():
-                if k in stream_entries:
-                    click.echo(f'{k}: {v}')
-        else:
-            click.echo('No video stream found')
+        return
+
+    def format_field(key: str, val: Optional[str]) -> str:
+        if val is None:
+            return 'N/A'
+        match key:
+            case 'size':
+                return f"{round(int(val) / (1024 * 1024))}MB"
+            case 'duration':
+                return f"{round(float(val))}s"
+            case 'bit_rate':
+                return f"{round(int(val) / 1000)}kb/s"
+            case _:
+                return str(val)
+
+    format_entries = ['filename', 'duration', 'size', 'bit_rate']
+    fmt = video_info.get('format', {})
+    for k in format_entries:
+        click.echo(f"{k}: {format_field(k, fmt.get(k))}")
+
+    stream_entries = ['codec_name', 'height', 'width']
+    video_streams = [s for s in video_info.get('streams', []) if s.get('codec_type') == 'video']
+    if not video_streams:
+        click.echo('No video stream found')
+        return
+    vs = video_streams[0]
+    for k in stream_entries:
+        if k in vs:
+            click.echo(f"{k}: {vs[k]}")
     
 @cli.command('repack', short_help='Change Video Container')
 @click.option('--format', '-f', type=click.Choice(['mkv', 'mp4']), default='mp4', help='Format of output')
