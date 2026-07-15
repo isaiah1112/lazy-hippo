@@ -120,9 +120,21 @@ def run_cmd(cmd: Sequence[str] | str) -> CompletedProcess:
 
 
 def format_command_error(exc: CalledProcessError) -> str:
-    stderr = getattr(exc, 'stderr', '')
-    if stderr and log.level <= logging.INFO:
-        return stderr.strip()
+    """Format a CalledProcessError into a concise, informative message.
+
+    Prefer returning cleaned `stderr` when available; fall back to exit
+    code text otherwise.
+    """
+    stderr = getattr(exc, 'stderr', None)
+    if stderr:
+        # Prefer to show stderr lines up to a reasonable length.
+        text = stderr.strip()
+        if text:
+            # show only first useful line but keep whole stderr when in debug
+            if log.level <= logging.DEBUG:
+                return text
+            first_line = text.splitlines()[0]
+            return first_line
     return f'Command failed with exit code {exc.returncode}'
 
 
