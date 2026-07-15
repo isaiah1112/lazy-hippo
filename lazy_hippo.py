@@ -9,7 +9,29 @@ import sys
 import tempfile
 from shlex import quote
 from subprocess import CalledProcessError, CompletedProcess, run
-from typing import Any, Sequence
+from typing import Any, Sequence, TypedDict, Optional
+
+
+class StreamInfo(TypedDict, total=False):
+    codec_type: str
+    codec_name: str
+    height: int
+    width: int
+    avg_frame_rate: str
+    r_frame_rate: str
+    nb_frames: str
+
+
+class FormatInfo(TypedDict, total=False):
+    filename: str
+    duration: str
+    size: str
+    bit_rate: str
+
+
+class ProbeMetadata(TypedDict):
+    format: FormatInfo
+    streams: list[StreamInfo]
 
 import click
 
@@ -83,7 +105,7 @@ def locate_binary(command: str) -> str:
     log.info(path)
     return path
     
-def probe_metadata(video_file: Path, short: bool = True) -> dict[str, Any]:
+def probe_metadata(video_file: Path, short: bool = True) -> ProbeMetadata:
     """ Use `ffprobe` to extract video metadata
     
     :param video_file: Path to video file
@@ -176,7 +198,7 @@ def draw_timestamp_on_image(image_path: Path, timestamp: str) -> None:
         image.save(image_path, quality=95)
 
 
-def get_frame_rate(stream: dict) -> float:
+def get_frame_rate(stream: StreamInfo) -> float:
     rate = stream.get('avg_frame_rate') or stream.get('r_frame_rate') or '0/1'
     if isinstance(rate, str) and '/' in rate:
         try:
