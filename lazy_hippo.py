@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from shlex import quote
 from subprocess import CalledProcessError, CompletedProcess, run
-from typing import Any, Optional, TypedDict
+from typing import Any, Optional, TypedDict, cast
 
 import click
 
@@ -335,7 +335,7 @@ def cli_info(**kwargs):
     vs = video_streams[0]
     for k in stream_entries:
         if k in vs:
-            click.echo(f"{k}: {vs[k]}")
+            click.echo(f"{k}: {cast(Any, vs)[k]}")
     
 @cli.command('repack', short_help='Change Video Container')
 @click.option('--format', '-f', type=click.Choice(['mkv', 'mp4']), default='mp4', help='Format of output')
