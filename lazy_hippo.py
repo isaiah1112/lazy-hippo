@@ -3,13 +3,13 @@
 import contextlib
 import json
 import logging
-import os
+from pathlib import Path
 import shutil
 import sys
 import tempfile
-from pathlib import Path
 from shlex import quote
 from subprocess import CalledProcessError, CompletedProcess, run
+from typing import Any, Sequence
 
 import click
 
@@ -83,7 +83,7 @@ def locate_binary(command: str) -> str:
     log.info(path)
     return path
     
-def probe_metadata(video_file: Path, short: bool = True) -> dict:
+def probe_metadata(video_file: Path, short: bool = True) -> dict[str, Any]:
     """ Use `ffprobe` to extract video metadata
     
     :param video_file: Path to video file
@@ -103,7 +103,7 @@ def probe_metadata(video_file: Path, short: bool = True) -> dict:
     return json.loads(video_metadata.stdout)
     
     
-def run_cmd(cmd: list[str] | str) -> CompletedProcess:
+def run_cmd(cmd: Sequence[str] | str) -> CompletedProcess:
     """Run a command without a shell and capture its output.
 
     :param cmd: ffmpeg or ffprobe command to run
@@ -192,7 +192,7 @@ def cli(ctx, **kwargs):
     ctx.obj['debug'] = debug_mode
     if debug_mode:
         log.setLevel(logging.INFO)
-    elif debug_mode and verbose_count > 0:
+    if verbose_count > 0:
         log.setLevel(logging.DEBUG)
 
 
@@ -255,7 +255,8 @@ def cli_join(**kwargs):
     else:
         click.secho(f'Joined {len(kwargs["file"])} files into {kwargs["output"]}', fg='green')
     finally:
-        os.remove(tf.name)  # Clean up our temporary file
+        # Use Path.unlink with missing_ok to avoid race conditions
+        Path(tf.name).unlink(missing_ok=True)
 
 @cli.command('info', short_help='Get Video Metadata')
 @click.option('--format', '-f', type=click.Choice(['txt', 'json']), default='txt', help='Format of output')
@@ -266,6 +267,10 @@ def cli_info(**kwargs):
     try:
         video_info = probe_metadata(kwargs['file'], short=False)
     except CalledProcessError as exc:
+        try:
+            exc.add_note('ffprobe failed when obtaining video metadata')
+        except Exception:
+            pass
         raise click.ClickException(f'ffprobe returned non-zero status: {format_command_error(exc)}') from exc
     if kwargs['format'] == 'json':
         click.echo(json.dumps(video_info, indent=2))
@@ -302,8 +307,15 @@ def cli_repack(**kwargs):
     try:
         run_cmd(cmd)
     except CalledProcessError as exc:
-        with contextlib.suppress(OSError):
-            os.remove(new_file)  # ffmpeg doesn't clean up files when repackaging fails
+        # Ensure partial output is removed if ffmpeg failed
+        try:
+            Path(new_file).unlink(missing_ok=True)
+        except Exception:
+            pass
+        try:
+            exc.add_note('ffmpeg failed during repackaging')
+        except Exception:
+            pass
         raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
     click.secho(f'Repackaged: {kwargs["file"]} to: {new_file}', fg='green')
     
@@ -321,8 +333,8 @@ def cli_gif_preview(**kwargs):
     ctx = click.get_current_context()
     debug_mode = (ctx.obj or {}).get('debug', False)
     ffmpeg = locate_binary('ffmpeg')
-    input_file = str(kwargs['file'])
-    output_file = str(kwargs['file'].with_suffix('.gif'))
+    input_file = kwargs['file']
+    output_file = kwargs['file'].with_suffix('.gif')
     start = kwargs['start']
     stop = kwargs['stop']
 
@@ -349,9 +361,9 @@ def cli_gif_preview(**kwargs):
     if start >= stop:
         raise click.BadOptionUsage('start', '--start must be before --stop')
     gif_count = (stop - start + kwargs['step'] - 1) // kwargs['step']
-    if os.path.exists(output_file):
+    if output_file.exists():
         if click.confirm(f'{output_file} exists. Overwrite?'):
-            os.remove(output_file)
+            output_file.unlink(missing_ok=True)
         else:
             raise click.Abort()
     with tempfile.TemporaryDirectory() as tmp:
@@ -365,6 +377,10 @@ def cli_gif_preview(**kwargs):
                 try:
                     run_cmd(cmd)
                 except CalledProcessError as exc:
+                    try:
+                        exc.add_note('ffmpeg failed while generating GIF segments')
+                    except Exception:
+                        pass
                     raise click.ClickException(f'ffmpeg returned non-zero status building gifs: {format_command_error(exc)}') from exc
                 log.info(f'Wrote: {gif_file}')
                 start += kwargs['step']
@@ -374,6 +390,10 @@ def cli_gif_preview(**kwargs):
         try:
             run_cmd(cmd)
         except CalledProcessError as exc:
+            try:
+                exc.add_note('ffmpeg failed while concatenating GIF previews')
+            except Exception:
+                pass
             raise click.ClickException(f'ffmpeg returned non-zero status combining gifs: {format_command_error(exc)}') from exc
         click.secho(f'Created preview GIF: {output_file}', fg='green')
 
@@ -420,7 +440,11 @@ def cli_extract(**kwargs):
         try:
             run_cmd(cmd)
         except CalledProcessError as exc:
-            raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
+                try:
+                    exc.add_note('ffmpeg failed while extracting frames')
+                except Exception:
+                    pass
+                raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
         bar.update(n_steps=total_frames)
 
     if kwargs['timestamp']:
