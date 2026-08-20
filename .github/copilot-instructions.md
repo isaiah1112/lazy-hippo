@@ -1,130 +1,106 @@
 # Custom Instructions for lazy-hippo
 
-## Repository Overview
+## Repository overview
 
-`lazy-hippo` is a CLI utility for manipulating video files without re-encoding, built on top of `ffmpeg` and `ffprobe`.
+`lazy-hippo` is a small CLI utility for manipulating video files without re-encoding. The project is built around `ffmpeg` and `ffprobe`, and the application logic is centered in a single file: `lazy_hippo.py`.
 
-## Project Structure
+## Project layout
 
-- `lazy_hippo.py` — Main CLI application (single-file module)
-- `tests/test_lazy_hippo.py` — Unit tests using unittest
-- `pyproject.toml` — Project configuration (hatchling build system)
-- `Makefile` — Development tasks (install, test, lint, etc.)
+- `lazy_hippo.py` — main CLI implementation and ffmpeg/ffprobe wrappers
+- `tests/test_lazy_hippo.py` — unit tests for the CLI and helpers
+- `README.md` — user-facing usage documentation
+- `pyproject.toml` — package metadata, dependencies, and Ruff config
+- `Makefile` — local dev tasks (`install`, `test`, `lint`, etc.)
+- `.venv/` — repository-local virtual environment preferred for Python work
 
-## CLI Commands
+## Environment and tooling
 
-The main entry point is `lazy-hippo` with these subcommands:
-
-| Command | Description |
-|---------|-------------|
-| `info` | Display video file metadata |
-| `split` | Split video into segments |
-| `join` | Concatenate multiple videos |
-| `repack` | Remux video without re-encoding |
-| `gif-preview` | Convert video to GIF |
-| `extract` | Extract audio/video streams |
-
-### Common Options
-
-- `-v, --verbose` — Increase verbosity (can be repeated)
-- `--debug` — Enable debug logging
-
-## Key Patterns
-
-### Click CLI Structure
-
-The CLI uses Click with a group and subcommands. Key patterns:
-
-```python
-import click
-
-@click.group()
-@click.option('-v', '--verbose', count=True)
-@click.option('--debug', is_flag=True)
-def cli():
-    pass
-
-@cli.command()
-@click.argument('file', type=click.Path(exists=True))
-def info(file):
-    pass
-```
-
-### Custom Parameter Types
-
-`TimeStamp` is a custom Click `ParamType` for parsing timestamps:
-
-- Integer: seconds (or -1 for auto-detect)
-- String: `SS`, `MM:SS`, or `HH:MM:SS` formats
-
-### Binary Discovery
-
-`locate_binary(command)` finds system binaries using `which`:
-
-```python
-ffmpeg = locate_binary('ffmpeg')
-```
-
-### Metadata Extraction
-
-`probe_metadata(video_file, short=True)` uses ffprobe to get video info.
-
-## Testing
-
-- Framework: `unittest` (not pytest)
-- Test runner: `ty` (CLI test runner)
-- Run tests: `make test` or `ty`
-
-### Running Tests
+- Use the repo-local environment for Python execution and package installation.
+- Prefer commands such as:
 
 ```bash
-make test        # Run all tests
-ty               # Run with ty CLI
-python -m unittest tests.test_lazy_hippo
+source .venv/bin/activate
+.venv/bin/python -m pytest
+uv run --group test pytest
+uv run --group test ruff check lazy_hippo.py
 ```
 
-## Code Quality
+- Do not install packages globally.
+- This project targets Python `>=3.11,<4.0`.
+- Native dependencies must be available on `PATH`: `ffmpeg` and `ffprobe`.
+- On macOS, the usual install is:
+
+```bash
+brew install ffmpeg
+```
+
+## CLI shape
+
+The entry point is `lazy-hippo`, implemented with Click. Common behavior:
+
+- `info` — print metadata about a video
+- `split` — extract time-based chunks or fixed-length segments
+- `join` — concatenate compatible input files
+- `repack` — change container without re-encoding
+- `gif-preview` — build a preview GIF from a video
+- `extract` — save frames from a video to disk
+
+Common options:
+
+- `-v, --verbose` — increases verbosity
+- `-d, --debug` — enables debug logging
+- `--help` — shows command-specific usage
+
+## Coding patterns and conventions
+
+- Keep the app in `lazy_hippo.py`; avoid adding submodules unless necessary.
+- Follow the existing Click command structure and reuse `click.UsageError` / `click.ClickException` for user-facing CLI failures.
+- Prefer `run_cmd(...)` for subprocess execution rather than ad hoc `subprocess.run()` calls.
+- Use `locate_binary("ffmpeg")` and `locate_binary("ffprobe")` before invoking native commands.
+- Use `probe_metadata(path, short=True/False)` to fetch ffprobe JSON.
+- `TimeStamp` is the custom Click parameter type for `SS`, `MM:SS`, and `HH:MM:SS`; `-1` is reserved as a sentinel for auto-detect.
+- Logging should go through the module logger `log`; avoid `print()` for status output.
+- Keep command arguments as lists, not shell strings, and use `shlex.quote()` when quoting file paths inside concat lists.
+
+## Testing and validation
+
+- Tests are written in `unittest` style and live in `tests/test_lazy_hippo.py`.
+- The repository also supports `pytest`/`ty` for running the suite.
+- Preferred validation commands:
+
+```bash
+make test
+make lint
+.venv/bin/python -m pytest
+uv run --group test pytest
+```
+
+- When changing behavior, add or update a focused test before finalizing the fix.
+- Keep changes small and targeted; match the file-level conventions already present in the project.
+
+## Code quality and linting
 
 - Linter: `ruff`
-- Configuration: `[tool.ruff.lint]` in `pyproject.toml`
-- Selected rules: `E`, `F`, `B`, `UP`, `SIM`, `I`
-- Ignored: `E501` (line too long), `F401` (unused import)
-
-### Linting
+- Configured rules: `E`, `F`, `B`, `UP`, `SIM`, `I`
+- Ignored rules: `E501` and `F401`
 
 ```bash
-make lint        # Run ruff
-ruff check .     # Direct ruff
-ruff format .    # Format code
+ruff check .
+ruff format .
 ```
 
-## Development Commands
+## Project-specific gotchas
 
-```bash
-make install     # Create venv and install dependencies
-make test        # Run tests
-make lint        # Run linter
-make format      # Format code
-make clean       # Clean build artifacts
-```
+- This is a stream-copying tool: many commands avoid re-encoding whenever possible.
+- `split --chunk` and `split --every` are mutually exclusive.
+- The default `extract` output directory is `extracted_frames/`.
+- `gif-preview` outputs a `.gif` next to the input file unless the caller overrides the target path.
+- The CLI is intentionally single-file and reuses global logger state alongside Click context flags.
 
-## Dependencies
+## Preferred workflow for repo work
 
-- `click>=8.1.3,<9` — CLI framework
-- `colorama>=0.4.6,<0.5` — Colored output
-- Runtime requires: `ffmpeg` and `ffprobe` (system binaries)
-
-## Gotchas
-
-1. **System dependencies required**: ffmpeg/ffprobe must be installed separately (`brew install ffmpeg`)
-2. **No re-encoding**: Commands remux without re-encoding (fast but limited)
-3. **Single-file module**: All code in `lazy_hippo.py` — no submodules
-4. **Custom TimeStamp type**: Accepts -1 as sentinel for auto-detect
-5. **Global state**: Uses global `debug` and `verbose` variables
-
-## Style Notes
-
-- Logging via `log` module (not print statements)
-- Use `click.UsageError` for CLI errors
-- Use `quote()` from shlex for safe subprocess arguments
-- Return `CompletedProcess` objects from subprocess calls
+1. Check the relevant command implementation in `lazy_hippo.py`.
+2. Reuse the project’s existing Click and ffmpeg patterns.
+3. Update or add focused tests in `tests/test_lazy_hippo.py` when behavior changes.
+4. Validate with the repo-local environment and the project’s standard lint/test commands.
+5. Keep user-facing documentation in sync with CLI changes.
