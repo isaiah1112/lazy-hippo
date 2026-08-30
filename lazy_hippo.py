@@ -213,7 +213,7 @@ def get_frame_rate(stream: StreamInfo) -> float:
         return 0.0
 
 
-@click.group()
+@click.group(name='lazy-hippo')
 @click.version_option()
 @click.option('--debug', '-d', is_flag=True, help='Enable Debug Mode')
 @click.option('--verbose', '-v', count=True, help='Increase debug verbosity')

@@ -55,6 +55,24 @@ pip install -e .
 - ffmpeg
 - ffprobe
 
+## Shell completion
+If you install the project using `pip install -e .` or another packaging tool producing the `lazy-hippo` console script, Click can generate shell completion for bash, zsh, and fish.
+
+Enable it in your current shell:
+
+```bash
+# bash
+eval "$(_LAZY_HIPPO_COMPLETE=source_bash lazy-hippo)"
+
+# zsh
+eval "$(_LAZY_HIPPO_COMPLETE=source_zsh lazy-hippo)"
+
+# fish
+_LAZY_HIPPO_COMPLETE=source_fish lazy-hippo | source
+```
+
+The built-in completion hook is automatically wired up when the installed command name is `lazy-hippo`.
+
 ## Usage
 Run `lazy-hippo --help` or any subcommand with `--help` for full options.
 
