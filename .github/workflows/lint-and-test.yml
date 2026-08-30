@@ -1,34 +1,81 @@
-name: Lint and UnitTest
+name: Lint and test
 
 on:
   push:
-    branches: [ "develop" ]
+    branches:
+      - main
+      - develop
   pull_request:
-    branches: [ "develop" ]
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+  lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v7
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install uv
-      uses: astral-sh/setup-uv@v7
-    - name: Lint with ruff
-      run: |
-        uv run --group test ruff check lazy_hippo.py
-    - name: Type Checking with ty
-      run: |
-        uv run --group test ty check lazy_hippo.py
-    - name: Run Tests
-      run: |
-        uv run --group test pytest
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Sync project dependencies
+        run: uv sync --group test
+
+      - name: Lint with ruff
+        run: uv run --group test ruff check lazy_hippo.py
+
+      - name: Type check with ty
+        run: uv run --group test ty check lazy_hippo.py
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Sync project dependencies
+        run: uv sync --group test
+
+      - name: Run tests
+        run: uv run --group test pytest
