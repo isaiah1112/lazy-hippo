@@ -62,13 +62,13 @@ Enable it in your current shell:
 
 ```bash
 # bash
-eval "$(_LAZY_HIPPO_COMPLETE=source_bash lazy-hippo)"
+eval "$(_LAZY_HIPPO_COMPLETE=bash_source lazy-hippo)"
 
 # zsh
-eval "$(_LAZY_HIPPO_COMPLETE=source_zsh lazy-hippo)"
+eval "$(_LAZY_HIPPO_COMPLETE=zsh_source lazy-hippo)"
 
 # fish
-_LAZY_HIPPO_COMPLETE=source_fish lazy-hippo | source
+_LAZY_HIPPO_COMPLETE=fish_source lazy-hippo | source
 ```
 
 The built-in completion hook is automatically wired up when the installed command name is `lazy-hippo`.
