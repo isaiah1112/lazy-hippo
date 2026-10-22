@@ -170,7 +170,8 @@ lazy-hippo extract -o outputs/frames input.mp4
 MIT License
 
 ## Supported Python Versions
-This project runs on the [latest supported Python versions.](https://devguide.python.org/versions/)
+This project supports Python 3.11 through 3.15. See the [Python Developer's
+Guide](https://devguide.python.org/versions/) for release lifecycle details.
 
 ## Contact / Support
 Open an issue on the repository for bugs and feature requests.

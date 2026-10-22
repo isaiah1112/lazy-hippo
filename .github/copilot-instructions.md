@@ -26,7 +26,7 @@ uv run --group test ruff check lazy_hippo.py
 ```
 
 - Do not install packages globally.
-- This project targets Python `>=3.11,<4.0`.
+- This project targets Python `>=3.11,<3.16` (Python 3.11 through 3.15).
 - Native dependencies must be available on `PATH`: `ffmpeg` and `ffprobe`.
 - On macOS, the usual install is:
 
