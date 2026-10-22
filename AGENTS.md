@@ -1,63 +1,64 @@
-# AGENTS.md
+# Project Instructions
 
-## Repository overview
+These instructions apply to all work in this repository. Keep them as the source of truth for project-specific guidance.
 
-This repository contains a small CLI utility for manipulating video files without re-encoding. The application logic is centered in `lazy_hippo.py`, with tests in `tests/test_lazy_hippo.py`.
+## Project Overview
 
-## Required Python environment
+`lazy-hippo` is a Click-based CLI for manipulating video files without re-encoding, using `ffmpeg` and `ffprobe`. The application is intentionally centered in `lazy_hippo.py`.
 
-This project is expected to run inside the repository-local virtual environment at `.venv`.
+Key files:
 
-- Always use `.venv` for Python execution, package installation, and dependency management.
-- Do not install Python packages globally.
-- Prefer these commands when working with Python modules:
+- `lazy_hippo.py` — CLI commands, helpers, and native-tool wrappers
+- `tests/test_lazy_hippo.py` — unit tests (written with `unittest`, run with pytest)
+- `pyproject.toml` — package metadata, dependencies, and Ruff configuration
+- `Makefile` — install, lint, test, and coverage targets
+- `README.md` — user-facing installation and usage documentation
 
-```bash
-source .venv/bin/activate
-python -m pip install -U pip
-python -m pip install -e .
-python -m pytest
-```
+## Python and Environment
 
-If using `uv`, keep it scoped to the repo-local environment:
+- Supported Python versions are 3.11 through 3.15 (`requires-python = ">=3.11,<3.16"`).
+- Use the repository-local `.venv` for Python execution and dependency management. Do not install packages globally.
+- Prefer `uv` for environment setup and project commands:
 
-```bash
-uv sync
-source .venv/bin/activate
-uv run --group test pytest
-uv run --group test ruff check lazy_hippo.py
-```
+  ```bash
+  uv sync --group test
+  uv run --group test pytest
+  uv run --group test ruff check lazy_hippo.py
+  uv run --group test ty check lazy_hippo.py
+  ```
 
-When invoking Python directly, use the venv interpreter explicitly when possible:
+- The Makefile provides `make install`, `make test`, `make lint`, and `make coverage`.
+- For pip installation into an existing environment, use `make install UV_INSTALL=0 PYTHON=.venv/bin/python`.
+- Runtime commands require `ffmpeg` and `ffprobe` on `PATH`. On macOS, install them with `brew install ffmpeg`.
 
-```bash
-.venv/bin/python -m pip install <package>
-.venv/bin/python -m pytest
-```
+## Implementation Conventions
 
-## Development workflow
+- Keep application logic in `lazy_hippo.py`; avoid new modules unless necessary.
+- Follow the existing Click command patterns. Report user-facing CLI failures with `click.UsageError` or `click.ClickException`.
+- Use `run_cmd(...)` for subprocess execution and `locate_binary("ffmpeg")` / `locate_binary("ffprobe")` before invoking native tools.
+- Use `probe_metadata(path, short=True/False)` for ffprobe JSON.
+- Keep subprocess arguments as lists, not shell strings. Use `shlex.quote()` for paths embedded in ffmpeg concat-list files.
+- Send status and diagnostic output through the module logger `log`; avoid `print()` for status output.
+- `TimeStamp` accepts `SS`, `MM:SS`, and `HH:MM:SS`; `-1` is reserved as the auto-detect sentinel.
+- Preserve stream-copy behavior where possible; these commands intentionally avoid re-encoding.
 
-- Keep changes focused and minimal.
-- Follow the project’s existing CLI and test patterns.
-- Use the repo’s Makefile when appropriate:
+## CLI Behavior to Preserve
 
-```bash
-make install
-make test
-make lint
-```
+- Commands are `info`, `split`, `join`, `repack`, `gif-preview`, and `extract`.
+- `split --chunk` and `split --every` are mutually exclusive.
+- `extract` defaults to the `extracted_frames/` output directory.
+- `gif-preview` writes a `.gif` next to the input unless a target path is provided.
+- The CLI intentionally reuses global logger state alongside Click context flags.
 
-## Validation
+## Testing and Quality
 
-Before considering work complete:
+- For behavior changes, add or update a focused test in `tests/test_lazy_hippo.py`.
+- Run the relevant tests and quality checks with the repo-local environment before finishing. Prefer:
 
-- run the relevant tests with the project venv,
-- prefer the repo-local environment instead of system Python,
-- ensure any added dependency installation is done in `.venv`.
+  ```bash
+  make test
+  make lint
+  ```
 
-## Key project notes
-
-- `lazy_hippo.py` is the single-file app entry point.
-- The CLI is built with Click.
-- Runtime dependencies include `ffmpeg` / `ffprobe` and Python packages from the project config.
-- Use `uv` and `.venv` as the standard environment for script execution and module work.
+- Ruff is configured in `pyproject.toml` with `E`, `F`, `B`, `UP`, `SIM`, and `I`; `E501` and `F401` are ignored.
+- Keep changes focused, follow existing formatting and patterns, and update the README when user-facing behavior changes.
