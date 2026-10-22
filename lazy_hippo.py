@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from shlex import quote
 from subprocess import CalledProcessError, CompletedProcess, run
-from typing import Any, TypedDict, cast
+from typing import TypedDict
 
 import click
 
@@ -218,16 +218,14 @@ def get_frame_rate(stream: StreamInfo) -> float:
 @click.option('--debug', '-d', is_flag=True, help='Enable Debug Mode')
 @click.option('--verbose', '-v', count=True, help='Increase debug verbosity')
 @click.pass_context
-def cli(ctx, **kwargs):
+def cli(ctx: click.Context, debug: bool, verbose: int):
     """ Easily work with video files
     """
     ctx.ensure_object(dict)
-    debug_mode = kwargs['debug']
-    verbose_count = kwargs['verbose']
-    ctx.obj['debug'] = debug_mode
-    if debug_mode:
+    ctx.obj['debug'] = debug
+    if debug:
         log.setLevel(logging.INFO)
-    if verbose_count > 0:
+    if verbose > 0:
         log.setLevel(logging.DEBUG)
 
 
@@ -236,30 +234,30 @@ def cli(ctx, **kwargs):
               help='Start/Stop timestamps of video to extract')
 @click.option('--every', '-E', type=int, default=0, help='Length of each chunk')
 @click.argument('file', type=click.Path(exists=True, dir_okay=False, path_type=Path))
-def cli_split(**kwargs):
+def cli_split(file: Path, every: int, chunk: tuple[tuple[int, int], ...]):
     """ Chop a video into smaller videos based on timestamps or every N seconds
     """
     ffmpeg = locate_binary('ffmpeg')
-    if kwargs['every'] > 0 and len(kwargs['chunk']) > 0:
+    if every > 0 and len(chunk) > 0:
         raise click.UsageError('Multiple operations are not supported')
     
-    input_file = str(kwargs['file'])
-    if len(kwargs['chunk']) > 0:
-        for idx, chunk in enumerate(kwargs['chunk']):
-            start_time, end_time = chunk
+    input_file = str(file)
+    if len(chunk) > 0:
+        for idx, time_range in enumerate(chunk):
+            start_time, end_time = time_range
             if end_time < start_time:
                 raise click.UsageError(f'Chunk {idx} end time {end_time} is before start time {start_time}')
             click.echo(f'Processing chunk {idx} from {start_time} to {end_time}...')
-            new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-{str(idx)}{kwargs["file"].suffix}'))
+            new_file = str(file.with_name(f'{file.stem}-{idx}{file.suffix}'))
             cmd = [ffmpeg, '-y', '-ss', str(start_time), '-to', str(end_time), '-i', input_file, '-c', 'copy', new_file]
             try:
                 run_cmd(cmd)
             except CalledProcessError as exc:
                 raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
-    elif kwargs['every'] > 0:
-        click.secho(f'Splitting video every {kwargs["every"]} seconds...')
-        new_file = str(kwargs['file'].with_name(f'{kwargs["file"].stem}-%03d{kwargs["file"].suffix}'))
-        cmd = [ffmpeg, '-i', input_file, '-c', 'copy', '-map', '0', '-f', 'segment', '-segment_time', str(kwargs['every']), '-reset_timestamps', '1', '-segment_format_options', 'movflags=+faststart', new_file]
+    elif every > 0:
+        click.secho(f'Splitting video every {every} seconds...')
+        new_file = str(file.with_name(f'{file.stem}-%03d{file.suffix}'))
+        cmd = [ffmpeg, '-i', input_file, '-c', 'copy', '-map', '0', '-f', 'segment', '-segment_time', str(every), '-reset_timestamps', '1', '-segment_format_options', 'movflags=+faststart', new_file]
         try:
             run_cmd(cmd)
         except CalledProcessError as exc:
@@ -272,23 +270,23 @@ def cli_split(**kwargs):
 @click.option('output', '-o', type=click.Path(exists=False, dir_okay=False, path_type=Path), required=True,
               help='Path to output file')
 @click.argument('file', nargs=-1, type=click.Path(exists=True, dir_okay=False, path_type=Path))
-def cli_join(**kwargs):
+def cli_join(output: Path, file: tuple[Path, ...]):
     """ Join multiple files into a single file without re-encoding
     """
     ffmpeg = locate_binary('ffmpeg')
-    if len(kwargs['file']) == 0:
+    if len(file) == 0:
         raise click.UsageError('At least one input file is required')
     with tempfile.NamedTemporaryFile('w', suffix='.txt', delete=False) as tf:
-        for f in kwargs['file']:
+        for f in file:
             tf.write(f"file {quote(str(f))}\n")
-    new_file = str(kwargs['output'])
+    new_file = str(output)
     cmd = [ffmpeg, '-y', '-f', 'concat', '-i', tf.name, '-c', 'copy', new_file]
     try:
         run_cmd(cmd)
     except CalledProcessError as exc:
         raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
     else:
-        click.secho(f'Joined {len(kwargs["file"])} files into {kwargs["output"]}', fg='green')
+        click.secho(f'Joined {len(file)} files into {output}', fg='green')
     finally:
         # Use Path.unlink with missing_ok to avoid race conditions
         Path(tf.name).unlink(missing_ok=True)
@@ -296,15 +294,15 @@ def cli_join(**kwargs):
 @cli.command('info', short_help='Get Video Metadata')
 @click.option('--format', '-f', type=click.Choice(['txt', 'json']), default='txt', help='Format of output')
 @click.argument('file', nargs=1, type=click.Path(exists=True, dir_okay=False, path_type=Path))
-def cli_info(**kwargs):
+def cli_info(file: Path, format: str):
     """ Get video stream and format metadata from a file using 'ffprobe'
     """
     try:
-        video_info = probe_metadata(kwargs['file'], short=False)
+        video_info = probe_metadata(file, short=False)
     except CalledProcessError as exc:
         exc.add_note('ffprobe failed when obtaining video metadata')
         raise click.ClickException(f'ffprobe returned non-zero status: {format_command_error(exc)}') from exc
-    if kwargs['format'] == 'json':
+    if format == 'json':
         click.echo(json.dumps(video_info, indent=2))
         return
 
@@ -326,25 +324,29 @@ def cli_info(**kwargs):
     for k in format_entries:
         click.echo(f"{k}: {format_field(k, fmt.get(k))}")
 
-    stream_entries = ['codec_name', 'height', 'width']
     video_streams = [s for s in video_info.get('streams', []) if s.get('codec_type') == 'video']
     if not video_streams:
         click.echo('No video stream found')
         return
     vs = video_streams[0]
-    for k in stream_entries:
-        if k in vs:
-            click.echo(f"{k}: {cast(Any, vs)[k]}")
+    stream_entries: tuple[tuple[str, str | int | None], ...] = (
+        ('codec_name', vs.get('codec_name')),
+        ('height', vs.get('height')),
+        ('width', vs.get('width')),
+    )
+    for key, value in stream_entries:
+        if value is not None:
+            click.echo(f'{key}: {value}')
     
 @cli.command('repack', short_help='Change Video Container')
 @click.option('--format', '-f', type=click.Choice(['mkv', 'mp4']), default='mp4', help='Format of output')
 @click.argument('file', nargs=1, type=click.Path(exists=True, dir_okay=False, path_type=Path))
-def cli_repack(**kwargs):
+def cli_repack(file: Path, format: str):
     """ Repackage a video into a different container type
     """
     ffmpeg = locate_binary('ffmpeg')
-    input_file = str(kwargs['file'])
-    new_file = str(kwargs['file'].with_suffix('.' + kwargs['format']))
+    input_file = str(file)
+    new_file = str(file.with_suffix('.' + format))
     cmd = [ffmpeg, '-i', input_file, '-c:v', 'copy', '-c:a', 'copy', new_file]
     try:
         run_cmd(cmd)
@@ -354,7 +356,7 @@ def cli_repack(**kwargs):
             Path(new_file).unlink(missing_ok=True)
         exc.add_note('ffmpeg failed during repackaging')
         raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
-    click.secho(f'Repackaged: {kwargs["file"]} to: {new_file}', fg='green')
+    click.secho(f'Repackaged: {file} to: {new_file}', fg='green')
     
 @cli.command('gif-preview', short_help='Create a GIF')
 @click.option('--start', default=0, type=TimeStamp(), help='Starting timestamp')
@@ -364,40 +366,38 @@ def cli_repack(**kwargs):
 @click.option('--fps', default=5, help="Frames Per Second")
 @click.option('--scale', default=320, help='Height of GIF in pixels')
 @click.argument('file', type=click.Path(exists=True, dir_okay=False, path_type=Path))
-def cli_gif_preview(**kwargs):
+def cli_gif_preview(file: Path, start: int, stop: int, step: int, length: int, fps: int, scale: int):
     """ Generate a GIF from a video
     """
     ctx = click.get_current_context()
     debug_mode = (ctx.obj or {}).get('debug', False)
     ffmpeg = locate_binary('ffmpeg')
-    input_file = kwargs['file']
-    output_file = kwargs['file'].with_suffix('.gif')
-    start = kwargs['start']
-    stop = kwargs['stop']
+    input_file = file
+    output_file = file.with_suffix('.gif')
 
     if start < 0:
         raise click.UsageError('--start must be non-negative')
     if stop != -1 and stop < 0:
         raise click.UsageError('--stop must be non-negative or -1')
-    if kwargs['step'] <= 0:
+    if step <= 0:
         raise click.UsageError('--step must be greater than zero')
-    if kwargs['length'] <= 0:
+    if length <= 0:
         raise click.UsageError('--length must be greater than zero')
-    if kwargs['fps'] <= 0:
+    if fps <= 0:
         raise click.UsageError('--fps must be greater than zero')
-    if kwargs['scale'] <= 0:
+    if scale <= 0:
         raise click.UsageError('--scale must be greater than zero')
 
-    video_filter = f'fps={kwargs["fps"]},scale={kwargs["scale"]}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse'
+    video_filter = f'fps={fps},scale={scale}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse'
     if stop == -1:
         try:
-            video_info = probe_metadata(kwargs['file'])
+            video_info = probe_metadata(file)
         except CalledProcessError as err:
             raise click.BadArgumentUsage('Unable to determine duration of video file. Please specify --stop manually') from err
         stop = round(float(video_info['format']['duration']))
     if start >= stop:
         raise click.BadOptionUsage('start', '--start must be before --stop')
-    gif_count = (stop - start + kwargs['step'] - 1) // kwargs['step']
+    gif_count = (stop - start + step - 1) // step
     if output_file.exists():
         if click.confirm(f'{output_file} exists. Overwrite?'):
             output_file.unlink(missing_ok=True)
@@ -410,14 +410,14 @@ def cli_gif_preview(**kwargs):
             while start < stop:
                 gif_file = tmp_dir / f'{start}.gif'
                 tmp_file.write(f'file {quote(str(gif_file))}\n')
-                cmd = [ffmpeg, '-i', str(input_file), '-ss', str(start), '-t', str(kwargs['length']), '-vf', video_filter, '-loop', '1', str(gif_file)]
+                cmd = [ffmpeg, '-i', str(input_file), '-ss', str(start), '-t', str(length), '-vf', video_filter, '-loop', '1', str(gif_file)]
                 try:
                     run_cmd(cmd)
                 except CalledProcessError as exc:
                     exc.add_note('ffmpeg failed while generating GIF segments')
                     raise click.ClickException(f'ffmpeg returned non-zero status building gifs: {format_command_error(exc)}') from exc
                 log.info(f'Wrote: {gif_file}')
-                start += kwargs['step']
+                start += step
                 bar.update(1)
         log.info('Combining gif previews into single file')
         cmd = [ffmpeg, '-f', 'concat', '-safe', '0', '-i', tmp_file.name, '-ignore_loop', '1', str(output_file)]
@@ -435,37 +435,37 @@ def cli_gif_preview(**kwargs):
 @click.option('--output', '-o', default=Path('extracted_frames'), type=click.Path(file_okay=False, exists=False, path_type=Path),
               help='Output directory')
 @click.argument('file', type=click.Path(exists=True, dir_okay=False, path_type=Path))
-def cli_extract(**kwargs):
+def cli_extract(file: Path, output: Path, timestamp: bool, every_frame: bool, step: int):
     """ Extract screen captures on a timed interval
     """
     ctx = click.get_current_context()
     debug_mode = (ctx.obj or {}).get('debug', False)
     ffmpeg = locate_binary('ffmpeg')
     try:
-        video_info = probe_metadata(kwargs['file'], short=False)
+        video_info = probe_metadata(file, short=False)
     except CalledProcessError as err:
         raise click.BadArgumentUsage('Unable to determine video duration') from err
     other_opts = ['-q:v', '2']
-    if kwargs['every_frame']:
+    if every_frame:
         total_frames = int(video_info['streams'][0].get('nb_frames', 0))
         click.echo(f'Extracting every frame will create a {total_frames} files.')
         if not click.confirm('Do you wish to continue?', default=False):
             raise click.Abort()
         video_filter = ''
     else:
-        if kwargs['step'] <= 0:
+        if step <= 0:
             raise click.UsageError('--step must be greater than zero')
         video_length = round(float(video_info['format']['duration']))
-        total_frames = video_length // kwargs['step']
-        video_filter = f'fps=1/{kwargs["step"]}'
+        total_frames = video_length // step
+        video_filter = f'fps=1/{step}'
 
-    cmd = [ffmpeg, '-i', str(kwargs['file'])]
+    cmd = [ffmpeg, '-i', str(file)]
     if video_filter:
         cmd.extend(['-vf', video_filter])
     cmd.extend(other_opts)
-    cmd.append(f'{str(kwargs["output"])}/img%03d.jpg')
+    cmd.append(f'{output}/img%03d.jpg')
     log.info('Creating output directory')
-    kwargs['output'].mkdir(parents=True, exist_ok=True)
+    output.mkdir(parents=True, exist_ok=True)
     log.info('Extracting frames')
     with click.progressbar(label=f'Extracting {total_frames} frames', length=total_frames, hidden=debug_mode) as bar:
         try:
@@ -475,14 +475,14 @@ def cli_extract(**kwargs):
                 raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
         bar.update(n_steps=total_frames)
 
-    if kwargs['timestamp']:
-        frame_files = sorted(kwargs['output'].glob('img*.jpg'))
-        frame_rate = get_frame_rate(video_info['streams'][0]) if kwargs['every_frame'] else 0.0
+    if timestamp:
+        frame_files = sorted(output.glob('img*.jpg'))
+        frame_rate = get_frame_rate(video_info['streams'][0]) if every_frame else 0.0
         for idx, frame_file in enumerate(frame_files):
-            if kwargs['every_frame']:
-                timestamp = format_hms(idx / frame_rate if frame_rate > 0 else idx)
+            if every_frame:
+                timestamp_text = format_hms(idx / frame_rate if frame_rate > 0 else idx)
             else:
-                timestamp = format_hms(idx * kwargs['step'])
-            draw_timestamp_on_image(frame_file, timestamp)
+                timestamp_text = format_hms(idx * step)
+            draw_timestamp_on_image(frame_file, timestamp_text)
 
-    click.secho(f'Wrote screencaps to: {kwargs["output"]}/', fg='green')
+    click.secho(f'Wrote screencaps to: {output}/', fg='green')
