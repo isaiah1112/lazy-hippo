@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from shlex import quote
 from subprocess import CalledProcessError, CompletedProcess, run
-from typing import Any, Optional, TypedDict, cast
+from typing import Any, TypedDict, cast
 
 import click
 
@@ -302,8 +302,7 @@ def cli_info(**kwargs):
     try:
         video_info = probe_metadata(kwargs['file'], short=False)
     except CalledProcessError as exc:
-        with contextlib.suppress(Exception):
-            exc.add_note('ffprobe failed when obtaining video metadata')
+        exc.add_note('ffprobe failed when obtaining video metadata')
         raise click.ClickException(f'ffprobe returned non-zero status: {format_command_error(exc)}') from exc
     if kwargs['format'] == 'json':
         click.echo(json.dumps(video_info, indent=2))
@@ -353,8 +352,7 @@ def cli_repack(**kwargs):
         # Ensure partial output is removed if ffmpeg failed
         with contextlib.suppress(Exception):
             Path(new_file).unlink(missing_ok=True)
-        with contextlib.suppress(Exception):
-            exc.add_note('ffmpeg failed during repackaging')
+        exc.add_note('ffmpeg failed during repackaging')
         raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
     click.secho(f'Repackaged: {kwargs["file"]} to: {new_file}', fg='green')
     
@@ -416,8 +414,7 @@ def cli_gif_preview(**kwargs):
                 try:
                     run_cmd(cmd)
                 except CalledProcessError as exc:
-                    with contextlib.suppress(Exception):
-                        exc.add_note('ffmpeg failed while generating GIF segments')
+                    exc.add_note('ffmpeg failed while generating GIF segments')
                     raise click.ClickException(f'ffmpeg returned non-zero status building gifs: {format_command_error(exc)}') from exc
                 log.info(f'Wrote: {gif_file}')
                 start += kwargs['step']
@@ -427,8 +424,7 @@ def cli_gif_preview(**kwargs):
         try:
             run_cmd(cmd)
         except CalledProcessError as exc:
-            with contextlib.suppress(Exception):
-                exc.add_note('ffmpeg failed while concatenating GIF previews')
+            exc.add_note('ffmpeg failed while concatenating GIF previews')
             raise click.ClickException(f'ffmpeg returned non-zero status combining gifs: {format_command_error(exc)}') from exc
         click.secho(f'Created preview GIF: {output_file}', fg='green')
 
@@ -475,8 +471,7 @@ def cli_extract(**kwargs):
         try:
             run_cmd(cmd)
         except CalledProcessError as exc:
-                with contextlib.suppress(Exception):
-                    exc.add_note('ffmpeg failed while extracting frames')
+                exc.add_note('ffmpeg failed while extracting frames')
                 raise click.ClickException(f'ffmpeg returned non-zero status: {format_command_error(exc)}') from exc
         bar.update(n_steps=total_frames)
 
