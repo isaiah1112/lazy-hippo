@@ -55,6 +55,24 @@ pip install -e .
 - ffmpeg
 - ffprobe
 
+## Shell completion
+If you install the project using `pip install -e .` or another packaging tool producing the `lazy-hippo` console script, Click can generate shell completion for bash, zsh, and fish.
+
+Enable it in your current shell:
+
+```bash
+# bash
+eval "$(_LAZY_HIPPO_COMPLETE=bash_source lazy-hippo)"
+
+# zsh
+eval "$(_LAZY_HIPPO_COMPLETE=zsh_source lazy-hippo)"
+
+# fish
+_LAZY_HIPPO_COMPLETE=fish_source lazy-hippo | source
+```
+
+The built-in completion hook is automatically wired up when the installed command name is `lazy-hippo`.
+
 ## Usage
 Run `lazy-hippo --help` or any subcommand with `--help` for full options.
 
@@ -152,7 +170,8 @@ lazy-hippo extract -o outputs/frames input.mp4
 MIT License
 
 ## Supported Python Versions
-This project runs on the [latest supported Python versions.](https://devguide.python.org/versions/)
+This project supports Python 3.11 through 3.15. See the [Python Developer's
+Guide](https://devguide.python.org/versions/) for release lifecycle details.
 
 ## Contact / Support
 Open an issue on the repository for bugs and feature requests.

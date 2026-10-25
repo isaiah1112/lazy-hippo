@@ -1,11 +1,12 @@
 UV_PATH := $(shell which uv 2>/dev/null)
 UV_INSTALL := 1
+PYTHON ?= python3
 
 .PHONY: help
 help:
 	@echo "Usage: make <target> [option]"
 	@echo "\nTargets:"
-	@echo "  install [UV_INSTALL]    Install project"
+	@echo "  install [UV_INSTALL=0] [PYTHON=python3.15]    Install project (PYTHON applies when UV_INSTALL=0)"
 	@echo "  lint    Run 'ruff' linting and 'ty' type-checking on project"
 	@echo "  test    Run unittests for project"
 	@echo "  coverage    Generate html coverage report"
@@ -20,7 +21,7 @@ install:
 	@if [ $(UV_INSTALL) -eq 1 ]; then\
 		$(MAKE) uv-init && uv sync && echo "Please run the following to activate the virtualenv:\n source .venv/bin/activate";\
 	else\
-		python -m pip install -U .;\
+		$(PYTHON) -m pip install -U .;\
 	fi
 
 .PHONY: lint

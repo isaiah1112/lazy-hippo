@@ -223,6 +223,28 @@ class TestTimestampOverlayHelpers(unittest.TestCase):
         self.assertAlmostEqual(lazy_hippo.get_frame_rate(stream), 29.97, places=2)
 
 
+class TestCliCompletion(unittest.TestCase):
+    """Test Click shell completion integration"""
+
+    def test_cli_uses_project_name_for_completion(self):
+        self.assertEqual(lazy_hippo.cli.name, 'lazy-hippo')
+
+        result = CliRunner().invoke(
+            lazy_hippo.cli,
+            [],
+            prog_name='lazy-hippo',
+            env={
+                '_LAZY_HIPPO_COMPLETE': 'bash_complete',
+                'COMP_WORDS': 'lazy-hippo ',
+                'COMP_CWORD': '1',
+            },
+        )
+
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn('extract', result.output)
+        self.assertIn('gif-preview', result.output)
+
+
 class TestCliSplit(unittest.TestCase):
     """Test the cli_split command"""
 
